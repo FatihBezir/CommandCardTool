@@ -57,7 +57,7 @@ namespace LauncherWinUI.Pages
         {
             try
             {
-                string json = await _httpClient.GetStringAsync("https://www.playgenerals.online/serverdata_basic.json");
+                string json = await _httpClient.GetStringAsync("https://api.playgenerals.online/env/prod/contract/1/Monitoring/BasicStats");
                 var data = System.Text.Json.JsonSerializer.Deserialize<ServerStats>(json);
                 if (data != null)
                     StatsLabel.Text = $"{data.Players} Players Online  •  {data.Lobbies} Lobbies";
