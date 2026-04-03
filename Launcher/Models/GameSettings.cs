@@ -43,6 +43,9 @@ namespace LauncherWinUI.Models
     public class LauncherSettingsFile
     {
         public bool prefer_experiemental_client { get; set; } = true;
+        public bool windowed { get; set; } = false;
+        public int windowed_width { get; set; } = 1920;
+        public int windowed_height { get; set; } = 1080;
     }
 
     public static class LaunchOptions

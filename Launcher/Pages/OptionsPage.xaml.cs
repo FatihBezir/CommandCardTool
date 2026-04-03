@@ -121,6 +121,12 @@ namespace LauncherWinUI.Pages
             "GeneralsOnlineData",
             "settings.json");
 
+        private string LauncherFilePath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Command and Conquer Generals Zero Hour Data",
+            "GeneralsOnlineData",
+            "launcher.json");
+
         private string IniFilePath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             "Command and Conquer Generals Zero Hour Data",
@@ -252,6 +258,8 @@ namespace LauncherWinUI.Pages
                 LaunchOptions.WindowedHeight = h;
             }
 
+            SaveWindowedToLauncherJson();
+
             _settings.social.notification_friend_comes_online_gameplay = chkFriendOnlineInGame.IsChecked == true;
             _settings.social.notification_friend_comes_online_menus = chkFriendOnlineInMenus.IsChecked == true;
             _settings.social.notification_friend_goes_offline_gameplay = chkFriendOfflineInGame.IsChecked == true;
@@ -268,6 +276,25 @@ namespace LauncherWinUI.Pages
                 _settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             SaveIniSettings();
+        }
+
+        private void SaveWindowedToLauncherJson()
+        {
+            try
+            {
+                var launcher = File.Exists(LauncherFilePath)
+                    ? System.Text.Json.JsonSerializer.Deserialize<LauncherSettingsFile>(
+                        File.ReadAllText(LauncherFilePath)) ?? new()
+                    : new LauncherSettingsFile();
+
+                launcher.windowed = LaunchOptions.Windowed;
+                launcher.windowed_width = LaunchOptions.WindowedWidth;
+                launcher.windowed_height = LaunchOptions.WindowedHeight;
+
+                File.WriteAllText(LauncherFilePath, System.Text.Json.JsonSerializer.Serialize(
+                    launcher, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch { }
         }
 
         private void SaveIniSettings()

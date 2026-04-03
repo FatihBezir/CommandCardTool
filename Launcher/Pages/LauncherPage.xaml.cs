@@ -102,6 +102,10 @@ namespace LauncherWinUI.Pages
 
                 rbTestEnv.IsChecked = !_launcherSettings.prefer_experiemental_client;
                 rbLiveClient.IsChecked = _launcherSettings.prefer_experiemental_client;
+
+                LaunchOptions.Windowed = _launcherSettings.windowed;
+                LaunchOptions.WindowedWidth = _launcherSettings.windowed_width;
+                LaunchOptions.WindowedHeight = _launcherSettings.windowed_height;
             }
             catch
             {
