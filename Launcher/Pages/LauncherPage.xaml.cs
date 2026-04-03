@@ -5,7 +5,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,7 +17,59 @@ namespace LauncherWinUI.Pages
 {
     public partial class LauncherPage : Page
     {
-        private static readonly HttpClient _httpClient = new();
+        private static readonly HttpClient _httpClient = new(new SocketsHttpHandler
+        {
+            UseProxy = false,
+            ConnectCallback = HappyEyeballsConnectAsync
+        });
+
+        // Races IPv4 and IPv6 connections in parallel, returns whichever wins (RFC 6555 Happy Eyeballs).
+        // Avoids the 20-30s stall that occurs when .NET tries IPv6 first and the network doesn't support it.
+        private static async ValueTask<Stream> HappyEyeballsConnectAsync(SocketsHttpConnectionContext context, CancellationToken ct)
+        {
+            var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, AddressFamily.Unspecified, ct);
+            if (addresses.Length == 0)
+                throw new SocketException((int)SocketError.HostNotFound);
+
+            using var raceCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+            async Task<Stream> TryConnect(IPAddress address)
+            {
+                var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                try
+                {
+                    await socket.ConnectAsync(address, context.DnsEndPoint.Port, raceCts.Token);
+                    return new NetworkStream(socket, ownsSocket: true);
+                }
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            }
+
+            var tasks = addresses.Select(TryConnect).ToList();
+            var exceptions = new List<Exception>();
+
+            while (tasks.Count > 0)
+            {
+                var done = await Task.WhenAny(tasks);
+                tasks.Remove(done);
+                try
+                {
+                    var stream = await done;
+                    raceCts.Cancel(); // cancel losing attempts
+                    return stream;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    exceptions.Add(ex);
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+            throw new AggregateException("Could not connect to any address", exceptions);
+        }
         private LauncherSettingsFile _launcherSettings = new();
         private bool _initializing = true;
 
