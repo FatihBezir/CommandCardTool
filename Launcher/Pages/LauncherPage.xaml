@@ -1,0 +1,173 @@
+<Page
+    x:Class="LauncherWinUI.Pages.LauncherPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#01031A">
+
+    <Page.Resources>
+        <!-- Base style for EXIT and OPTIONS buttons -->
+        <Style x:Key="ActionButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Height" Value="72"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#2980FF"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#070E38" Offset="0"/>
+                        <GradientStop Color="#020618" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border
+                            x:Name="RootBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4">
+                            <Grid>
+                                <!-- Top accent line matches border color -->
+                                <Rectangle
+                                    Height="2"
+                                    VerticalAlignment="Top"
+                                    Fill="{TemplateBinding BorderBrush}"
+                                    Opacity="0.7"
+                                    RadiusX="4" RadiusY="4"/>
+                                <ContentPresenter
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    TextBlock.Foreground="{TemplateBinding Foreground}"
+                                    TextBlock.FontSize="{TemplateBinding FontSize}"
+                                    TextBlock.FontWeight="{TemplateBinding FontWeight}"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#0A1660"/>
+                    <Setter Property="BorderBrush" Value="#5BA4FF"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#2980FF"/>
+                    <Setter Property="BorderBrush" Value="#5BA4FF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- PLAY button: gold accent, fills solid on hover -->
+        <Style x:Key="PlayButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Foreground" Value="#FECD03"/>
+            <Setter Property="BorderBrush" Value="#FECD03"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#1A1200" Offset="0"/>
+                        <GradientStop Color="#080800" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FECD03"/>
+                    <Setter Property="Foreground" Value="#01031A"/>
+                    <Setter Property="BorderBrush" Value="#FECD03"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#D4AC02"/>
+                    <Setter Property="Foreground" Value="#01031A"/>
+                    <Setter Property="BorderBrush" Value="#D4AC02"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="100"/>
+        </Grid.RowDefinitions>
+
+        <!-- Logo -->
+        <Image
+            Grid.Row="0"
+            x:Name="LogoImage"
+            Stretch="Uniform"
+            MaxHeight="200"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center"
+            Margin="20,10"/>
+
+        <!-- Server stats -->
+        <TextBlock
+            x:Name="StatsLabel"
+            Grid.Row="1"
+            HorizontalAlignment="Center"
+            Foreground="#7A9CC4"
+            FontFamily="Segoe UI"
+            FontSize="13"
+            Margin="0,0,0,8"/>
+
+        <!-- Client selector (hidden unless test env exe exists) -->
+        <StackPanel
+            x:Name="ClientSelectorPanel"
+            Grid.Row="2"
+            Orientation="Horizontal"
+            HorizontalAlignment="Right"
+            Margin="12,0,12,6"
+            Visibility="Collapsed">
+            <RadioButton
+                x:Name="rbLiveClient"
+                Content="Live Client"
+                GroupName="ClientSelector"
+                IsChecked="True"
+                Checked="ClientSelector_Changed"
+                Margin="0,0,20,0"/>
+            <RadioButton
+                x:Name="rbTestEnv"
+                Content="Test Environment"
+                GroupName="ClientSelector"
+                Checked="ClientSelector_Changed"/>
+        </StackPanel>
+
+        <!-- Action buttons -->
+        <Grid Grid.Row="3" Margin="12,10,12,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Button
+                Grid.Column="0"
+                Content="EXIT"
+                Style="{StaticResource ActionButtonStyle}"
+                Margin="0,0,6,0"
+                Click="BtnExit_Click"/>
+
+            <Button
+                Grid.Column="1"
+                Content="OPTIONS"
+                Style="{StaticResource ActionButtonStyle}"
+                Margin="3,0"
+                Click="BtnOptions_Click"/>
+
+            <Button
+                Grid.Column="2"
+                Content="PLAY"
+                Style="{StaticResource PlayButtonStyle}"
+                Margin="6,0,0,0"
+                Click="BtnPlay_Click"/>
+        </Grid>
+    </Grid>
+</Page>
