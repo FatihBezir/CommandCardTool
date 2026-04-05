@@ -114,6 +114,48 @@
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="MinWidth" Value="220"/>
         </Style>
+        <!-- Diagnostics button style -->
+        <Style x:Key="DiagButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#01031A"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="BorderBrush" Value="#2980FF"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextBlock.Foreground="{TemplateBinding Foreground}"
+                                              TextBlock.FontSize="{TemplateBinding FontSize}"
+                                              TextBlock.FontWeight="{TemplateBinding FontWeight}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#040C52"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#5BA4FF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#020630"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="BorderBrush" Value="#404060"/>
+                                <Setter TargetName="border" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Page.Resources>
 
     <Grid>
@@ -315,6 +357,159 @@
                         </ComboBox>
                     </StackPanel>
                     <CheckBox x:Name="chkAlternativeEndpoint" Content="Use Alternative Endpoints"/>
+
+                    <!-- ── DIAGNOSTICS ──────────────────────────────────────── -->
+                    <Rectangle Height="1" Fill="#252550" Margin="0,16,0,16"/>
+                    <TextBlock Text="DIAGNOSTICS" Style="{StaticResource SectionHeaderStyle}" Margin="0,0,0,12"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                        <Button x:Name="btnRunDiagnostics"
+                                Content="▶  RUN DIAGNOSTICS"
+                                Style="{StaticResource DiagButtonStyle}"
+                                Margin="0,0,10,0"
+                                Click="BtnRunDiagnostics_Click"/>
+                        <Button x:Name="btnCopyDiag"
+                                Content="⎘  COPY"
+                                Style="{StaticResource DiagButtonStyle}"
+                                IsEnabled="False"
+                                Click="BtnCopyDiag_Click"/>
+                    </StackPanel>
+
+                    <!-- Results panel — hidden until first run -->
+                    <Border x:Name="panelDiagResults" Visibility="Collapsed"
+                            Background="#07091C" BorderBrush="#2A2A55" BorderThickness="1"
+                            Padding="14,12,14,14" Margin="0,0,0,10">
+                        <StackPanel>
+
+                            <!-- Internet baseline -->
+                            <TextBlock Text="INTERNET" Foreground="#404070" FontSize="10"
+                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotGeo" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="Your Location" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valGeo" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotCF" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="Cloudflare" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valCF" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotDl" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="Download Speed" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valDl" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                <Ellipse x:Name="dotUl" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="Upload Speed" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valUl" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- Game server -->
+                            <TextBlock Text="GAME SERVER" Foreground="#404070" FontSize="10"
+                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,10,0,6"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotDns" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="DNS Resolution" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valDns" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotPing" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="Server Ping  (ICMP)" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valPing" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotProto" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="Protocol" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valProto" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotHttp" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="HTTP Latency" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valHttp" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                <Ellipse x:Name="dotServer" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="Server Status" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valServer" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- Connectivity -->
+                            <TextBlock Text="CONNECTIVITY" Foreground="#404070" FontSize="10"
+                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,10,0,6"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotCdn" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="CDN  cdn.playgenerals.online" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valCdn" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotStun" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="STUN  stun.playgenerals.online" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valStun" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse x:Name="dotTurn" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="TURN  turn.playgenerals.online" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valTurn" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                <Ellipse x:Name="dotNat" Width="8" Height="8" Fill="#404070"
+                                         VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="NAT Type" Foreground="#8888AA"
+                                           FontSize="12" VerticalAlignment="Center" MinWidth="210"/>
+                                <TextBlock x:Name="valNat" Text="—" Foreground="#606080"
+                                           FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Run log — last 10 results -->
+                    <TextBlock Text="LOG" Foreground="#404070" FontSize="10"
+                               FontWeight="Bold" FontFamily="Segoe UI" Margin="0,0,0,6"/>
+                    <Border Background="#07091C" BorderBrush="#2A2A55" BorderThickness="1"
+                            Padding="10,8" MaxHeight="130">
+                        <ScrollViewer x:Name="diagLogScroller" VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="diagLog"/>
+                        </ScrollViewer>
+                    </Border>
+
                 </StackPanel>
             </Grid>
         </ScrollViewer>

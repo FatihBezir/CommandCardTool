@@ -1,18 +1,31 @@
 using LauncherWinUI.Models;
+using LauncherWinUI.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using Ellipse = System.Windows.Shapes.Ellipse;
 
 namespace LauncherWinUI.Pages
 {
     public partial class OptionsPage : Page
     {
         private GameSettingsFile _settings = new();
+        private NetworkDiagnosticsResult? _lastDiagResult;
+        private CancellationTokenSource? _diagCts;
+
+        // Diagnostic colour palette
+        private static SolidColorBrush DiagGreen  => new(Color.FromRgb(0x55, 0xCC, 0x55));
+        private static SolidColorBrush DiagYellow => new(Color.FromRgb(0xFF, 0xAA, 0x00));
+        private static SolidColorBrush DiagRed    => new(Color.FromRgb(0xFF, 0x44, 0x44));
+        private static SolidColorBrush DiagGray   => new(Color.FromRgb(0x55, 0x55, 0x88));
 
         [StructLayout(LayoutKind.Explicit, CharSet = CharSet.Ansi, Size = 220)]
         private struct DEVMODE
@@ -330,5 +343,252 @@ namespace LauncherWinUI.Pages
         }
 
         private static string Y(bool b) => b ? "yes" : "no";
+
+        // ─── Network Diagnostics ─────────────────────────────────────────────────
+
+        private async void BtnRunDiagnostics_Click(object sender, RoutedEventArgs e)
+        {
+            _diagCts?.Cancel();
+            _diagCts = new CancellationTokenSource();
+
+            btnRunDiagnostics.IsEnabled = false;
+            btnRunDiagnostics.Content   = "⟳  RUNNING...";
+            btnCopyDiag.IsEnabled       = false;
+            panelDiagResults.Visibility = Visibility.Visible;
+            ResetDiagnosticsUI();
+
+            try
+            {
+                var result = await new NetworkDiagnosticsService().RunAsync(_diagCts.Token);
+                _lastDiagResult = result;
+                UpdateDiagnosticsUI(result);
+                AppendDiagLog(result);
+                btnCopyDiag.IsEnabled = true;
+            }
+            catch (OperationCanceledException) { }
+            catch { }
+            finally
+            {
+                btnRunDiagnostics.IsEnabled = true;
+                btnRunDiagnostics.Content   = "▶  RUN DIAGNOSTICS";
+            }
+        }
+
+        private void BtnCopyDiag_Click(object sender, RoutedEventArgs e)
+        {
+            if (_lastDiagResult is not { } r) return;
+            var sb = new StringBuilder();
+            sb.AppendLine("═══ Generals Online Network Diagnostics ═══");
+            sb.AppendLine($"Time:         {r.Timestamp:yyyy-MM-dd HH:mm:ss}");
+            if (r.GeoSuccess)
+            {
+                string location = r.GeoCountryCode == "US" && r.GeoCity.Length > 0
+                    ? $"{r.GeoCity}, {r.GeoCountry}" : r.GeoCountry;
+                sb.AppendLine($"Location:     {location} - {r.GeoContinent}");
+                sb.AppendLine($"ISP:          {r.GeoIsp}");
+                sb.AppendLine($"External IP:  {RedactIp(r.GeoIp)}");
+            }
+            sb.AppendLine();
+            sb.AppendLine("─ Internet ─");
+            sb.AppendLine($"Cloudflare:   {(r.CloudflareSuccess ? $"{r.CloudflareAvgMs}ms avg, {r.CloudflareLossPercent}% loss" : "Unreachable")}");
+            sb.AppendLine($"Download:     {(r.DownloadMbps > 0 ? $"{r.DownloadMbps:F1} Mbps" : "Failed")}");
+            sb.AppendLine($"Upload:       {(r.UploadMbps > 0 ? $"{r.UploadMbps:F1} Mbps" : "Failed")}");
+            sb.AppendLine();
+            sb.AppendLine("─ Game Server ─");
+            sb.AppendLine($"DNS:          {(r.DnsSuccess ? $"OK — {r.DnsAddresses}" : "FAILED")}");
+            sb.AppendLine($"Ping (ICMP):  {(r.PingSuccess ? $"{r.PingAvgMs}ms avg (min {r.PingMinMs} / max {r.PingMaxMs}), {r.PingLossPercent}% loss" : "Unreachable")}");
+            sb.AppendLine($"Protocol:     {r.Protocol}");
+            sb.AppendLine($"HTTP Latency: {(r.HttpSuccess ? $"{r.HttpLatencyMs}ms" : "Failed")}");
+            sb.AppendLine($"Server:       {(r.ServerOnline ? $"Online — {r.PlayersOnline} players, {r.Lobbies} lobbies" : "Offline / Unreachable")}");
+            sb.AppendLine();
+            sb.AppendLine("─ Connectivity ─");
+            sb.AppendLine($"CDN:          {(r.CdnSuccess ? $"{r.CdnLatencyMs}ms" : "Unreachable")}");
+            sb.AppendLine($"STUN:         {(r.StunSuccess ? $"OK — {RedactEndpoint(r.StunExternalEndpoint)} ({r.StunLatencyMs}ms)" : "Unreachable")}");
+            sb.AppendLine($"TURN:         {(r.TurnSuccess ? $"OK — {r.TurnEndpoint} ({r.TurnLatencyMs}ms)" : "Unreachable")}");
+            sb.AppendLine($"NAT Type:     {r.NatType} — {r.NatTypeDetail}");
+            try { Clipboard.SetText(sb.ToString()); } catch { }
+        }
+
+        private void ResetDiagnosticsUI()
+        {
+            var gray = DiagGray;
+            foreach (var dot in new[] { dotGeo, dotCF, dotDl, dotUl, dotDns, dotPing, dotProto, dotHttp, dotServer, dotCdn, dotStun, dotTurn, dotNat })
+                dot.Fill = gray;
+            foreach (var val in new[] { valGeo, valCF, valDl, valUl, valDns, valPing, valProto, valHttp, valServer, valCdn, valStun, valTurn, valNat })
+            {
+                val.Text       = "checking…";
+                val.Foreground = gray;
+            }
+        }
+
+        private void UpdateDiagnosticsUI(NetworkDiagnosticsResult r)
+        {
+            // Geolocation
+            if (r.GeoSuccess)
+            {
+                string location = r.GeoCountryCode == "US" && r.GeoCity.Length > 0
+                    ? $"{r.GeoCity}, {r.GeoCountry}"
+                    : r.GeoCountry;
+                string geoText = location;
+                if (r.GeoContinent.Length > 0) geoText += $" - {r.GeoContinent}";
+                if (r.GeoIsp.Length > 0)       geoText += $" - {r.GeoIsp}";
+                SetRow(dotGeo, valGeo, true, geoText, DiagGreen);
+            }
+            else
+                SetRow(dotGeo, valGeo, false, "Could not determine location", DiagGray);
+
+            // Cloudflare internet baseline
+            SetRow(dotCF, valCF,
+                r.CloudflareSuccess,
+                r.CloudflareSuccess
+                    ? $"{r.CloudflareAvgMs}ms avg  {r.CloudflareLossPercent}% loss"
+                    : "Unreachable",
+                r.CloudflareSuccess ? LossColor(r.CloudflareLossPercent) : DiagRed);
+
+            // Download speed
+            SetRow(dotDl, valDl,
+                r.SpeedTestSuccess && r.DownloadMbps > 0,
+                r.DownloadMbps > 0 ? $"{r.DownloadMbps:F1} Mbps" : "Failed",
+                r.DownloadMbps > 0 ? SpeedColor(r.DownloadMbps) : DiagRed);
+
+            // Upload speed
+            SetRow(dotUl, valUl,
+                r.SpeedTestSuccess && r.UploadMbps > 0,
+                r.UploadMbps > 0 ? $"{r.UploadMbps:F1} Mbps" : "Failed",
+                r.UploadMbps > 0 ? SpeedColor(r.UploadMbps) : DiagRed);
+
+            // DNS
+            SetRow(dotDns, valDns,
+                r.DnsSuccess,
+                r.DnsSuccess ? r.DnsAddresses : "Resolution failed",
+                r.DnsSuccess ? DiagGreen : DiagRed);
+
+            // Ping
+            SetRow(dotPing, valPing,
+                r.PingSuccess,
+                r.PingSuccess
+                    ? $"{r.PingAvgMs}ms avg  (min {r.PingMinMs} / max {r.PingMaxMs})  {r.PingLossPercent}% loss"
+                    : "Unreachable (ICMP may be blocked)",
+                r.PingSuccess ? LatencyColor(r.PingAvgMs) : DiagRed);
+
+            // Protocol
+            bool protoOk = r.Protocol is "IPv4" or "IPv6";
+            SetRow(dotProto, valProto, protoOk, r.Protocol, protoOk ? DiagGreen : DiagGray);
+
+            // HTTP latency
+            SetRow(dotHttp, valHttp,
+                r.HttpSuccess,
+                r.HttpSuccess ? $"{r.HttpLatencyMs}ms" : "Request failed",
+                r.HttpSuccess ? LatencyColor(r.HttpLatencyMs) : DiagRed);
+
+            // Server status
+            if (r.ServerOnline)
+                SetRow(dotServer, valServer, true,
+                    $"Online — {r.PlayersOnline} players  •  {r.Lobbies} lobbies", DiagGreen);
+            else
+                SetRow(dotServer, valServer, false,
+                    r.HttpSuccess ? "Degraded (HTTP error)" : "Offline / Unreachable", DiagRed);
+
+            // CDN
+            SetRow(dotCdn, valCdn,
+                r.CdnSuccess,
+                r.CdnSuccess ? $"{r.CdnLatencyMs}ms" : "Unreachable",
+                r.CdnSuccess ? LatencyColor(r.CdnLatencyMs) : DiagRed);
+
+            // STUN
+            SetRow(dotStun, valStun,
+                r.StunSuccess,
+                r.StunSuccess ? $"{r.StunLatencyMs}ms  ({RedactEndpoint(r.StunExternalEndpoint)})" : "Unreachable",
+                r.StunSuccess ? LatencyColor(r.StunLatencyMs) : DiagRed);
+
+            // TURN
+            SetRow(dotTurn, valTurn,
+                r.TurnSuccess,
+                r.TurnSuccess ? $"{r.TurnLatencyMs}ms  ({r.TurnEndpoint})" : "Unreachable",
+                r.TurnSuccess ? LatencyColor(r.TurnLatencyMs) : DiagRed);
+
+            // NAT type
+            var (natColor, natText) = r.NatType switch
+            {
+                NatType.Open or NatType.FullCone or NatType.RestrictedCone
+                    => (DiagGreen,  $"{NatTypeLabel(r.NatType)} — {r.NatTypeDetail}"),
+                NatType.PortRestrictedCone
+                    => (DiagYellow, $"Port Restricted Cone — {r.NatTypeDetail}"),
+                NatType.Symmetric
+                    => (DiagRed,    $"Symmetric — {r.NatTypeDetail}"),
+                _   => (DiagGray,   $"Unknown — {r.NatTypeDetail}")
+            };
+            SetRow(dotNat, valNat, r.NatType != NatType.Unknown, natText, natColor);
+        }
+
+        private void AppendDiagLog(NetworkDiagnosticsResult r)
+        {
+            const int MaxEntries = 10;
+
+            string entry = $"[{r.Timestamp:HH:mm:ss}]  " +
+                $"↓ {(r.DownloadMbps > 0 ? $"{r.DownloadMbps:F1}Mbps" : "✗")}  " +
+                $"↑ {(r.UploadMbps > 0 ? $"{r.UploadMbps:F1}Mbps" : "✗")}  |  " +
+                $"CF: {(r.CloudflareSuccess ? $"{r.CloudflareAvgMs}ms" : "✗")}  |  " +
+                $"Ping: {(r.PingSuccess ? $"{r.PingAvgMs}ms {r.PingLossPercent}% loss" : "✗")}  |  " +
+                $"HTTP: {(r.HttpSuccess ? $"{r.HttpLatencyMs}ms" : "✗")}  |  " +
+                $"STUN: {(r.StunSuccess ? "✓" : "✗")}  |  " +
+                $"TURN: {(r.TurnSuccess ? "✓" : "✗")}  |  " +
+                $"NAT: {NatTypeLabel(r.NatType)}  |  " +
+                $"{(r.ServerOnline ? "Online" : "Offline")}";
+
+            diagLog.Children.Insert(0, new TextBlock
+            {
+                Text        = entry,
+                Foreground  = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x99)),
+                FontSize    = 11,
+                FontFamily  = new FontFamily("Consolas"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin      = new Thickness(0, 0, 0, 3)
+            });
+
+            while (diagLog.Children.Count > MaxEntries)
+                diagLog.Children.RemoveAt(diagLog.Children.Count - 1);
+        }
+
+        private static void SetRow(Ellipse dot, TextBlock val, bool ok, string text, SolidColorBrush color)
+        {
+            dot.Fill       = color;
+            val.Text       = text;
+            val.Foreground = color;
+        }
+
+        private static SolidColorBrush LatencyColor(int ms) =>
+            ms <= 60 ? DiagGreen : ms <= 150 ? DiagYellow : DiagRed;
+
+        private static SolidColorBrush LossColor(int pct) =>
+            pct == 0 ? DiagGreen : pct < 25 ? DiagYellow : DiagRed;
+
+        private static SolidColorBrush SpeedColor(double mbps) =>
+            mbps >= 10 ? DiagGreen : mbps >= 1 ? DiagYellow : DiagRed;
+
+        private static string NatTypeLabel(NatType t) => t switch
+        {
+            NatType.Open              => "Open",
+            NatType.FullCone          => "Full Cone",
+            NatType.RestrictedCone    => "Restricted",
+            NatType.PortRestrictedCone => "Port Restr.",
+            NatType.Symmetric         => "Symmetric",
+            _                         => "Unknown"
+        };
+
+        private static string RedactIp(string ip)
+        {
+            int last = ip.LastIndexOf('.');
+            return last >= 0 ? ip[..last] + ".XXX" : ip;
+        }
+
+        // Redacts the IP portion of an "ip:port" endpoint string
+        private static string RedactEndpoint(string endpoint)
+        {
+            int colon = endpoint.LastIndexOf(':');
+            string ip   = colon >= 0 ? endpoint[..colon] : endpoint;
+            string port = colon >= 0 ? endpoint[colon..]  : "";
+            return RedactIp(ip) + port;
+        }
     }
 }
