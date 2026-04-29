@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -75,6 +76,89 @@ namespace LauncherWinUI.Pages
                 cmbWindowedResolution.SelectedIndex = selectIndex;
         }
 
+        private void PopulateAnticheatPlugins()
+        {
+            cmbAnticheatPlugin.Items.Clear();
+            configDetailsPanel.Children.Clear();
+            configDetailsPanel.Children.Add(new TextBlock 
+            { 
+                Text = "(No plugin selected)",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xC0)),
+                FontSize = 11
+            });
+            
+            try
+            {
+                string pluginsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins");
+                
+                if (!Directory.Exists(pluginsPath))
+                {
+                    return;
+                }
+
+                var pluginFolders = Directory.GetDirectories(pluginsPath)
+                    .Where(dir => Directory.GetFiles(dir, "*.json").Any())
+                    .OrderBy(dir => new DirectoryInfo(dir).Name)
+                    .ToList();
+
+                foreach (var pluginDir in pluginFolders)
+                {
+                    string folderName = new DirectoryInfo(pluginDir).Name;
+                    string displayName = folderName; // default to folder name
+                    
+                    // Try to extract plugin_name from JSON
+                    try
+                    {
+                        var jsonFiles = Directory.GetFiles(pluginDir, "*.json")
+                            .OrderBy(f => Path.GetFileName(f))
+                            .FirstOrDefault();
+                        
+                        if (jsonFiles != null)
+                        {
+                            string jsonContent = File.ReadAllText(jsonFiles);
+                            var jsonData = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent);
+                            
+                            if (jsonData != null && jsonData.TryGetValue("plugin_name", out var pluginNameObj))
+                            {
+                                displayName = pluginNameObj?.ToString() ?? folderName;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // If JSON reading fails, just use folder name
+                    }
+                    
+                    // Add to dropdown with folder name as Tag (for internal lookup)
+                    cmbAnticheatPlugin.Items.Add(new ComboBoxItem 
+                    { 
+                        Content = displayName,
+                        Tag = folderName
+                    });
+                }
+
+                if (cmbAnticheatPlugin.Items.Count > 0)
+                {
+                    int selectIndex = 0;
+                    for (int i = 0; i < cmbAnticheatPlugin.Items.Count; i++)
+                    {
+                        if (cmbAnticheatPlugin.Items[i] is ComboBoxItem item &&
+                            item.Tag?.ToString() == _settings.plugins.anticheat)
+                        {
+                            selectIndex = i;
+                            break;
+                        }
+                    }
+                    cmbAnticheatPlugin.SelectedIndex = selectIndex;
+                    DisplayAnticheatPluginDetails();
+                }
+            }
+            catch
+            {
+                // silently fail if plugins folder doesn't exist or can't be read
+            }
+        }
+
         public OptionsPage()
         {
             InitializeComponent();
@@ -96,6 +180,7 @@ namespace LauncherWinUI.Pages
             PanelGraphics.Visibility = Visibility.Collapsed;
             PanelSocial.Visibility = Visibility.Collapsed;
             PanelNetwork.Visibility = Visibility.Collapsed;
+            PanelPlugins.Visibility = Visibility.Collapsed;
 
             if (ReferenceEquals(sender, rbCamera)) PanelCamera.Visibility = Visibility.Visible;
             else if (ReferenceEquals(sender, rbChat)) PanelChat.Visibility = Visibility.Visible;
@@ -103,6 +188,11 @@ namespace LauncherWinUI.Pages
             else if (ReferenceEquals(sender, rbGraphics)) PanelGraphics.Visibility = Visibility.Visible;
             else if (ReferenceEquals(sender, rbSocial)) PanelSocial.Visibility = Visibility.Visible;
             else if (ReferenceEquals(sender, rbNetwork)) PanelNetwork.Visibility = Visibility.Visible;
+            else if (ReferenceEquals(sender, rbPlugins))
+            {
+                PanelPlugins.Visibility = Visibility.Visible;
+                PopulateAnticheatPlugins();
+            }
         }
 
         private void ChkLimitFramerate_Changed(object sender, RoutedEventArgs e)
@@ -120,6 +210,246 @@ namespace LauncherWinUI.Pages
         private void NumericOnly_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
             e.Handled = !e.Text.All(char.IsDigit);
+        }
+
+        private void CmbAnticheatPlugin_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            DisplayAnticheatPluginDetails();
+        }
+
+        private void DisplayAnticheatPluginDetails()
+        {
+            configDetailsPanel.Children.Clear();
+
+            if (cmbAnticheatPlugin.SelectedItem is not ComboBoxItem item)
+            {
+                configDetailsPanel.Children.Add(new TextBlock 
+                { 
+                    Text = "(No plugin selected)",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xC0)),
+                    FontSize = 11
+                });
+                return;
+            }
+
+            // Use Tag (folder name) for file lookup, not Content (display name)
+            string folderName = item.Tag?.ToString();
+            if (string.IsNullOrEmpty(folderName))
+            {
+                configDetailsPanel.Children.Add(new TextBlock 
+                { 
+                    Text = "(Invalid plugin folder)",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x88, 0x88)),
+                    FontSize = 11
+                });
+                return;
+            }
+
+            try
+            {
+                string pluginPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins", folderName);
+                
+                if (!Directory.Exists(pluginPath))
+                {
+                    configDetailsPanel.Children.Add(new TextBlock 
+                    { 
+                        Text = $"(Plugin directory not found: {folderName})",
+                        Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x88, 0x88)),
+                        FontSize = 11
+                    });
+                    return;
+                }
+
+                var jsonFiles = Directory.GetFiles(pluginPath, "*.json")
+                    .OrderBy(f => Path.GetFileName(f))
+                    .ToList();
+
+                if (jsonFiles.Count == 0)
+                {
+                    configDetailsPanel.Children.Add(new TextBlock 
+                    { 
+                        Text = "(No JSON files found in plugin)",
+                        Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xC0)),
+                        FontSize = 11
+                    });
+                    return;
+                }
+
+                // Parse and display each JSON file
+                foreach (var jsonFile in jsonFiles)
+                {
+                    string fileName = Path.GetFileName(jsonFile);
+                    
+                    try
+                    {
+                        string jsonContent = File.ReadAllText(jsonFile);
+                        var jsonData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent);
+                        
+                        if (jsonData != null)
+                        {
+                            AddFileSection(fileName, jsonData);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        configDetailsPanel.Children.Add(new TextBlock 
+                        { 
+                            Text = $"Error parsing {fileName}: {ex.Message}",
+                            Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x88, 0x88)),
+                            FontSize = 10,
+                            Margin = new Thickness(0, 8, 0, 8)
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                configDetailsPanel.Children.Add(new TextBlock 
+                { 
+                    Text = $"(Error loading plugin details: {ex.Message})",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x88, 0x88)),
+                    FontSize = 11
+                });
+            }
+        }
+
+        private void AddFileSection(string fileName, Dictionary<string, object> data)
+        {
+            var filePanel = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+
+            // Use plugin_name field if available, otherwise use filename
+            string headerText = fileName;
+            if (data.TryGetValue("plugin_name", out var pluginNameObj) && pluginNameObj != null)
+            {
+                headerText = pluginNameObj.ToString();
+            }
+
+            // File name header
+            var fileHeader = new TextBlock
+            {
+                Text = headerText,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x41, 0xB6, 0xFF)),
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            filePanel.Children.Add(fileHeader);
+
+            // Properties grid
+            var propertiesPanel = new StackPanel { Margin = new Thickness(8, 0, 0, 0) };
+            
+            foreach (var kvp in data.OrderBy(x => x.Key))
+            {
+                // Skip plugin_name if it was used as header
+                if (kvp.Key == "plugin_name" && data.TryGetValue("plugin_name", out var _))
+                    continue;
+                
+                AddPropertyRow(propertiesPanel, kvp.Key, kvp.Value, indent: 0);
+            }
+
+            filePanel.Children.Add(propertiesPanel);
+            configDetailsPanel.Children.Add(filePanel);
+        }
+
+        private void AddPropertyRow(StackPanel container, string key, object value, int indent)
+        {
+            var rowPanel = new StackPanel 
+            { 
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(indent * 12, 4, 0, 4)
+            };
+
+            // Property name - convert to human readable format
+            string displayKey = ToHumanReadableName(key);
+            var keyBlock = new TextBlock
+            {
+                Text = displayKey + ":",
+                Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0xBB, 0xFF)),
+                FontSize = 11,
+                MinWidth = 140,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            rowPanel.Children.Add(keyBlock);
+
+            // Property value
+            if (value is Dictionary<string, object> dict)
+            {
+                var nestedPanel = new StackPanel { Margin = new Thickness(8, 0, 0, 0) };
+                var nestedHeader = new TextBlock
+                {
+                    Text = "{",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xC0)),
+                    FontSize = 11
+                };
+                nestedPanel.Children.Add(nestedHeader);
+
+                foreach (var nestedKvp in dict.OrderBy(x => x.Key))
+                {
+                    AddPropertyRow(nestedPanel, nestedKvp.Key, nestedKvp.Value, indent: 1);
+                }
+
+                var closeBrace = new TextBlock
+                {
+                    Text = "}",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xC0)),
+                    FontSize = 11
+                };
+                nestedPanel.Children.Add(closeBrace);
+                rowPanel.Children.Add(nestedPanel);
+            }
+            else
+            {
+                var valueBlock = new TextBlock
+                {
+                    Text = FormatValue(value),
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0xC0, 0x88)),
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap
+                };
+                rowPanel.Children.Add(valueBlock);
+            }
+
+            container.Children.Add(rowPanel);
+        }
+
+        private string FormatValue(object value)
+        {
+            if (value == null)
+                return "null";
+            
+            if (value is JsonElement elem)
+            {
+                return elem.ValueKind switch
+                {
+                    System.Text.Json.JsonValueKind.String => $"\"{elem.GetString()}\"",
+                    System.Text.Json.JsonValueKind.Number => elem.GetRawText(),
+                    System.Text.Json.JsonValueKind.True => "true",
+                    System.Text.Json.JsonValueKind.False => "false",
+                    _ => elem.GetRawText()
+                };
+            }
+
+            if (value is string str)
+                return $"\"{str}\"";
+            
+            if (value is bool b)
+                return b ? "true" : "false";
+            
+            if (value is JsonElement)
+                return value.ToString();
+
+            return value.ToString();
+        }
+
+        private string ToHumanReadableName(string fieldName)
+        {
+            // Convert snake_case to Title Case
+            // e.g., "plugin_author" -> "Plugin Author"
+            //       "last_update" -> "Last Update"
+            //       "version" -> "Version"
+            return string.Join(" ", 
+                fieldName.Split('_')
+                    .Select(word => char.ToUpper(word[0]) + word.Substring(1).ToLower()));
         }
 
         private void BtnBack_Click(object sender, RoutedEventArgs e)
@@ -150,7 +480,7 @@ namespace LauncherWinUI.Pages
             return int.TryParse(tb.Text, out int v) ? v : defaultVal;
         }
 
-        private void LoadGameSettings()
+        public void LoadGameSettings()
         {
             try
             {
@@ -195,12 +525,58 @@ namespace LauncherWinUI.Pages
                 chkAlternativeEndpoint.IsChecked = _settings.network.use_alternative_endpoint;
 
                 LoadIniSettings();
+                
+                // If anticheat was empty, default to first plugin and save
+                if (string.IsNullOrEmpty(_settings.plugins.anticheat))
+                {
+                    DefaultAnticheatToFirstPlugin();
+                }
             }
             catch
             {
                 MessageBox.Show("Your settings have been reset due to an update. Please reconfigure them.",
                     "Notice", MessageBoxButton.OK, MessageBoxImage.Information);
                 NavigationService?.GoBack();
+            }
+        }
+        
+        private void DefaultAnticheatToFirstPlugin()
+        {
+            try
+            {
+                string pluginsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins");
+                
+                if (!Directory.Exists(pluginsPath))
+                    return;
+
+                // Check if current anticheat's plugin still exists with valid DLL
+                if (!string.IsNullOrEmpty(_settings.plugins.anticheat))
+                {
+                    string currentPluginPath = Path.Combine(pluginsPath, _settings.plugins.anticheat);
+                    var dllFiles = Directory.GetFiles(currentPluginPath, "*.dll");
+                    
+                    // If plugin folder exists and has a DLL, keep it
+                    if (Directory.Exists(currentPluginPath) && dllFiles.Any())
+                        return;
+                    
+                    // Plugin or DLL is missing, will default to first below
+                }
+
+                var firstPlugin = Directory.GetDirectories(pluginsPath)
+                    .Where(dir => Directory.GetFiles(dir, "*.json").Any() && Directory.GetFiles(dir, "*.dll").Any())
+                    .OrderBy(dir => new DirectoryInfo(dir).Name)
+                    .FirstOrDefault();
+
+                if (firstPlugin != null)
+                {
+                    _settings.plugins.anticheat = new DirectoryInfo(firstPlugin).Name;
+                    File.WriteAllText(SettingsFilePath, System.Text.Json.JsonSerializer.Serialize(
+                        _settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                }
+            }
+            catch
+            {
+                // silently fail if plugins folder doesn't exist or can't be read
             }
         }
 
@@ -284,6 +660,9 @@ namespace LauncherWinUI.Pages
 
             _settings.network.http_version = cmbHTTPVersion.SelectedIndex;
             _settings.network.use_alternative_endpoint = chkAlternativeEndpoint.IsChecked == true;
+
+            if (cmbAnticheatPlugin.SelectedItem is ComboBoxItem pluginItem)
+                _settings.plugins.anticheat = pluginItem.Tag?.ToString() ?? "";
 
             File.WriteAllText(SettingsFilePath, System.Text.Json.JsonSerializer.Serialize(
                 _settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));

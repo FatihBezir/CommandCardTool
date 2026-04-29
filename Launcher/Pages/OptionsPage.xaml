@@ -185,6 +185,8 @@
                              Style="{StaticResource NavTabStyle}" Checked="Tab_Checked"/>
                 <RadioButton x:Name="rbNetwork" Content="NETWORK" GroupName="OptionsTabs"
                              Style="{StaticResource NavTabStyle}" Checked="Tab_Checked"/>
+                <RadioButton x:Name="rbPlugins" Content="PLUGINS" GroupName="OptionsTabs"
+                             Style="{StaticResource NavTabStyle}" Checked="Tab_Checked"/>
             </StackPanel>
 
             <Button Grid.Row="1" x:Name="btnBack"
@@ -510,6 +512,33 @@
                         </ScrollViewer>
                     </Border>
 
+                </StackPanel>
+
+                <!-- PLUGINS -->
+                <StackPanel x:Name="PanelPlugins" Visibility="Collapsed">
+                    <TextBlock Text="PLUGINS" Style="{StaticResource SectionHeaderStyle}"/>
+                    
+                    <!-- ANTICHEAT -->
+                    <TextBlock Text="ANTICHEAT" Foreground="#8888AA" FontSize="12" FontWeight="Bold" 
+                               Margin="0,0,0,8"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <TextBlock Text="Plugin" Style="{StaticResource FieldLabelStyle}"/>
+                        <ComboBox x:Name="cmbAnticheatPlugin" Width="250"
+                                  Background="#1E1E2E" Foreground="White" BorderBrush="#404060"
+                                  SelectionChanged="CmbAnticheatPlugin_SelectionChanged"/>
+                    </StackPanel>
+                    
+                    <!-- Configuration Details -->
+                    <TextBlock Text="CONFIGURATION" Foreground="#8888AA" FontSize="12" FontWeight="Bold" 
+                               Margin="0,0,0,8"/>
+                    <Border Background="#07091C" BorderBrush="#2A2A55" BorderThickness="1"
+                            Padding="14,12" MaxHeight="400" Margin="0,0,0,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="configDetailsPanel">
+                                <TextBlock Text="(No plugin selected)" Foreground="#A0A0C0" FontSize="11"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
                 </StackPanel>
             </Grid>
         </ScrollViewer>
