@@ -806,6 +806,45 @@ namespace LauncherWinUI.Pages
         private static CcSlotDef CCI(int n, string labelId, string imageId)
             => new CcSlotDef((n - 1) / 7, (n - 1) % 7, NormalizeCsfId(labelId), NormalizeCsfId(imageId));
 
+        private static string BareCsfId(string csfId)
+        {
+            int ci = csfId.IndexOf(':');
+            return ci >= 0 ? csfId[(ci + 1)..] : csfId;
+        }
+
+        private static readonly Dictionary<string, string[]> _shortcutLabelAliasesByBare
+            = new(StringComparer.OrdinalIgnoreCase)
+        {
+            // General powers often use a separate SPECIAL_POWER_FROM_SHORTCUT button.
+            // Keep that command's TextLabel hotkey in sync with the visible command-card label.
+            ["a10thunderboltmissilestrike"] = new[] { "GUI:SuperweaponA10ThunderboltMissileStrike" },
+            ["ambush"] = new[] { "GUI:SuperweaponRebelAmbush" },
+            ["anthraxbomb"] = new[] { "OBJECT:AnthraxBomb" },
+            ["artillerybarrage"] = new[] { "CONTROLBAR:NoHotKeyArtilleryBarrage" },
+            ["carpetbomb"] = new[] { "OBJECT:CarpetBomb", "OBJECT:Nuke_CarpetBomb" },
+            ["cashhack"] = new[] { "GUI:SuperweaponCashHack" },
+            ["ciaintelligence"] = new[] { "CONTROLBAR:CIAIntelligenceShortcut" },
+            ["clustermines"] = new[] { "OBJECT:ClusterMinesBomb" },
+            ["communicationsdownload"] = new[] { "CONTROLBAR:CommunicationsDownloadShortcut" },
+            ["daisycutter"] = new[] { "OBJECT:DaisyCutterBomb" },
+            ["emergencyrepair"] = new[] { "GUI:SuperweaponEmergencyRepair" },
+            ["emppulse"] = new[] { "OBJECT:EMPPulseBomb" },
+            ["fireparticleuplinkcannon"] = new[] { "CONTROLBAR:FireParticleUplinkCannonShortcut" },
+            ["frenzy"] = new[] { "CONTROLBAR:NoHotKeyFrenzy" },
+            ["gpsscrambler"] = new[] { "GUI:SuperweaponGPSScrambler" },
+            ["icbm"] = new[] { "CONTROLBAR:ICBMShortcut" },
+            ["leafletdrop"] = new[] { "CONTROLBAR:LeafletDropShort" },
+            ["napalmstrike"] = new[] { "GUI:SuperweaponNapalmStrike" },
+            ["neutronmissile"] = new[] { "CONTROLBAR:NeutronMissileShortcut" },
+            ["nukedrop"] = new[] { "OBJECT:NukeDrop" },
+            ["paradrop"] = new[] { "GUI:SuperweaponParadropAmerica" },
+            ["radarvanscan"] = new[] { "CONTROLBAR:RadarVanScanShortcut" },
+            ["scudstorm"] = new[] { "CONTROLBAR:ScudStormShortcut" },
+            ["spydrone"] = new[] { "OBJECT:SpyDrone" },
+            ["spysatellite"] = new[] { "CONTROLBAR:NoHotKeySpySatellite" },
+            ["tankparadrop"] = new[] { "GUI:SuperweaponTankParadrop" },
+        };
+
         private static readonly string[] _usaSharedUnits = {
             "Ranger", "Colonel Burton", "Pathfinder", "Humvee", "Avenger",
             "Tomahawk", "Medic", "Sentry Drone", "Microwave Tank",
@@ -1379,9 +1418,10 @@ namespace LauncherWinUI.Pages
         private static readonly StarSlotRef STAR_FRENZY1 = new("CONTROLBAR:Frenzy",                      "SCIENCE:ChinaFrenzy");
         private static readonly StarSlotRef STAR_AMB1    = new("CONTROLBAR:Ambush",                      "SCIENCE:GLARebelAmbush1");
         private static readonly StarSlotRef STAR_ANTHRAX = new("CONTROLBAR:AnthraxBomb",                 "SCIENCE:GLAAnthraxBomb");
-        private static readonly StarSlotRef STAR_CLUSTER = new("SCIENCE:ChinaClusterMines",              "CONTROLBAR:ClusterMines");
-        private static readonly StarSlotRef STAR_SPY     = new("SCIENCE:USASpyDrone");
+        private static readonly StarSlotRef STAR_CLUSTER = new("CONTROLBAR:ClusterMines",                "SCIENCE:ChinaClusterMines");
+        private static readonly StarSlotRef STAR_SPY     = new("CONTROLBAR:SpyDrone",                    "SCIENCE:USASpyDrone");
         private static readonly StarSlotRef STAR_PATHFINDER = new("SCIENCE:USAPathfinder");
+        private static readonly StarSlotRef STAR_DAISY   = new("CONTROLBAR:DaisyCutter",                 "SCIENCE:USADaisyCutter");
         private static readonly StarSlotRef STAR_A101    = new("CONTROLBAR:A10ThunderboltMissileStrike", "SCIENCE:USAA10Strike1");
         private static readonly StarSlotRef STAR_A102    = new("CONTROLBAR:A10ThunderboltMissileStrike", "SCIENCE:USAA10Strike2");
         private static readonly StarSlotRef STAR_A103    = new("CONTROLBAR:A10ThunderboltMissileStrike", "SCIENCE:USAA10Strike3");
@@ -1399,6 +1439,10 @@ namespace LauncherWinUI.Pages
         private static readonly StarSlotRef STAR_CASH_HACK3 = new("CONTROLBAR:CashHack", "SCIENCE:ChinaCashHack3");
         private static readonly StarSlotRef STAR_FRENZY2 = new("CONTROLBAR:Frenzy", "SCIENCE:ChinaFrenzy2");
         private static readonly StarSlotRef STAR_FRENZY3 = new("CONTROLBAR:Frenzy", "SCIENCE:ChinaFrenzy3");
+        private static readonly StarSlotRef STAR_EMP     = new("CONTROLBAR:EMPPulse", "SCIENCE:ChinaEMPPulse");
+        private static readonly StarSlotRef STAR_TANK_PD1 = new("CONTROLBAR:TankParadrop", "SCIENCE:ChinaTankParadrop1");
+        private static readonly StarSlotRef STAR_TANK_PD2 = new("CONTROLBAR:TankParadrop", "SCIENCE:ChinaTankParadrop2");
+        private static readonly StarSlotRef STAR_TANK_PD3 = new("CONTROLBAR:TankParadrop", "SCIENCE:ChinaTankParadrop3");
         private static readonly StarSlotRef STAR_CARPET  = new("CONTROLBAR:CarpetBomb", "SCIENCE:ChinaCarpetBomb");
         private static readonly StarSlotRef STAR_CARPET_NUKE = new("CONTROLBAR:CarpetBomb", "SCIENCE:Nuke_ChinaCarpetBomb");
 
@@ -1423,7 +1467,7 @@ namespace LauncherWinUI.Pages
                 [16] = STAR_PD3,
                 [17] = STAR_A103,
                 [18] = STAR_ER3,
-                [20] = new StarSlotRef("SCIENCE:USADaisyCutter"),
+                [20] = STAR_DAISY,
                 [21] = STAR_LEAFLET,
             },
             ["USA Laser (Townes)"] = new() {
@@ -1439,7 +1483,7 @@ namespace LauncherWinUI.Pages
                 [16] = STAR_PD3,
                 [17] = STAR_A103,
                 [18] = STAR_ER3,
-                [20] = new StarSlotRef("SCIENCE:USADaisyCutter"),
+                [20] = STAR_DAISY,
                 [21] = STAR_LEAFLET,
                 [22] = STAR_SG1,
             },
@@ -1456,7 +1500,7 @@ namespace LauncherWinUI.Pages
                 [16] = STAR_PD3,
                 [17] = STAR_A103,
                 [18] = STAR_ER3,
-                [20] = new StarSlotRef("SCIENCE:USADaisyCutter"),
+                [20] = STAR_DAISY,
                 [21] = STAR_LEAFLET,
                 [22] = STAR_SG1,
             },
@@ -1475,7 +1519,7 @@ namespace LauncherWinUI.Pages
                 [17] = STAR_A103,
                 [18] = STAR_ER3,
                 [19] = STAR_SG2,
-                [20] = new StarSlotRef("SCIENCE:USADaisyCutter"),
+                [20] = STAR_DAISY,
                 [21] = STAR_SG3,
             },
             ["China General"] = new() {
@@ -1496,7 +1540,7 @@ namespace LauncherWinUI.Pages
                 [17] = STAR_CASH_HACK3,
                 [18] = STAR_ER3,
                 [19] = STAR_FRENZY3,
-                [20] = new StarSlotRef("SCIENCE:ChinaEMPPulse"),
+                [20] = STAR_EMP,
             },
             ["China Infantry (Shin Fai)"] = new() {
                 [1]  = new StarSlotRef("SCIENCE:INFA_ChinaRedGuardTraining"),
@@ -1516,7 +1560,7 @@ namespace LauncherWinUI.Pages
                 [16] = STAR_AB3,
                 [17] = STAR_ER3,
                 [19] = STAR_PD3,
-                [20] = new StarSlotRef("SCIENCE:ChinaEMPPulse"),
+                [20] = STAR_EMP,
             },
             ["China Tank (Kwai)"] = new() {
                 [1]  = new StarSlotRef("SCIENCE:ChinaRedGuardTraining"),
@@ -1524,17 +1568,17 @@ namespace LauncherWinUI.Pages
                 [4]  = STAR_ER1,
                 [5]  = STAR_CLUSTER,
                 [6]  = STAR_AB1,
-                [7]  = new StarSlotRef("SCIENCE:ChinaTankParadrop1"),
+                [7]  = STAR_TANK_PD1,
                 [8]  = STAR_ER2,
                 [9]  = STAR_FRENZY1,
                 [11] = STAR_AB2,
-                [12] = new StarSlotRef("SCIENCE:ChinaTankParadrop2"),
+                [12] = STAR_TANK_PD2,
                 [13] = STAR_ER3,
                 [14] = STAR_FRENZY2,
                 [16] = STAR_AB3,
-                [17] = new StarSlotRef("SCIENCE:ChinaTankParadrop3"),
+                [17] = STAR_TANK_PD3,
                 [19] = STAR_FRENZY3,
-                [20] = new StarSlotRef("SCIENCE:ChinaEMPPulse"),
+                [20] = STAR_EMP,
             },
             ["China Nuke (Tao)"] = new() {
                 [1]  = new StarSlotRef("SCIENCE:ChinaRedGuardTraining"),
@@ -1553,7 +1597,7 @@ namespace LauncherWinUI.Pages
                 [16] = STAR_AB3,
                 [17] = STAR_CASH_HACK3,
                 [19] = STAR_FRENZY3,
-                [20] = new StarSlotRef("SCIENCE:ChinaEMPPulse"),
+                [20] = STAR_EMP,
             },
             ["GLA General"] = new() {
                 [1]  = new StarSlotRef("SCIENCE:GLAScudLauncher"),
@@ -2649,6 +2693,35 @@ namespace LauncherWinUI.Pages
             return FormatCcSlotId(labelCsfId);
         }
 
+        private int SetCsfLabelAndShortcutAliases(string labelCsfId, string labelText)
+        {
+            _csfLabels ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            string labelKey = ResolveCsfLabelKey(labelCsfId);
+            _csfLabels[labelKey] = labelText;
+            int updated = 1;
+
+            char hotkey = HotkeyPainter.ExtractHotkeyChar(labelText);
+            if (hotkey == '\0') return updated;
+
+            if (!_shortcutLabelAliasesByBare.TryGetValue(BareCsfId(labelCsfId), out var aliases)
+             && !_shortcutLabelAliasesByBare.TryGetValue(BareCsfId(labelKey), out aliases))
+                return updated;
+
+            foreach (string aliasId in aliases)
+            {
+                string aliasKey = ResolveCsfLabelKey(aliasId);
+                if (string.Equals(aliasKey, labelKey, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string aliasRaw = GetCsfLabelRawText(aliasId);
+                _csfLabels[aliasKey] = CommandCardHotkeyService.SetHotkeyCharInLabel(aliasRaw, hotkey);
+                updated++;
+            }
+
+            return updated;
+        }
+
         private static char ParseSingleKey(TextBox? tb)
         {
             string s = (tb?.Text ?? "").Trim();
@@ -2950,8 +3023,9 @@ namespace LauncherWinUI.Pages
                     if (conflictingLabelKeys?.Contains(labelKey) == true) continue;
                     if (!labelKeys.Add(labelKey)) continue;
                     string raw = GetCsfLabelRawText(slot.CsfId);
-                    _csfLabels[labelKey] = CommandCardHotkeyService.ApplyHotkeyCharToLabel(raw, key);
-                    updated++;
+                    updated += SetCsfLabelAndShortcutAliases(
+                        slot.CsfId,
+                        CommandCardHotkeyService.ApplyHotkeyCharToLabel(raw, key));
                 }
             }
             return updated;
@@ -2971,10 +3045,10 @@ namespace LauncherWinUI.Pages
             {
                 if (!STAR_SLOT_MAP.TryGetValue(army, out var stars) || !stars.TryGetValue(starNum, out var star))
                     continue;
-                string labelKey = ResolveCsfLabelKey(star.LabelCsfId);
                 string raw = GetCsfLabelRawText(star.LabelCsfId);
-                _csfLabels[labelKey] = CommandCardHotkeyService.ApplyHotkeyCharToLabel(raw, key);
-                updated++;
+                updated += SetCsfLabelAndShortcutAliases(
+                    star.LabelCsfId,
+                    CommandCardHotkeyService.ApplyHotkeyCharToLabel(raw, key));
             }
             return updated;
         }
@@ -3301,7 +3375,7 @@ namespace LauncherWinUI.Pages
                 return;
 
             _csfLabels ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            _csfLabels[_currentEditCsfKey] = labelText;
+            SetCsfLabelAndShortcutAliases(_currentEditCsfKey, labelText);
 
             if (!PersistCommandCardToBig(tgaPatches: null))
             {
@@ -3335,7 +3409,7 @@ namespace LauncherWinUI.Pages
                 return;
 
             _csfLabels ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            _csfLabels[_currentEditCsfKey] = labelText;
+            SetCsfLabelAndShortcutAliases(_currentEditCsfKey, labelText);
 
             if (!await ApplyHotkeyImagePatchesAsync(new List<CommandCardHotkeyService.SlotBinding>
                 {
@@ -3749,32 +3823,68 @@ namespace LauncherWinUI.Pages
         private string? _idleWorkerBigPath;
         private string? _idleWorkerIniPath;
         private string? _beaconIniPath;
+        private string? _gameCommandMapBigPath;
+        private string? _gameCommandMapIniPath;
         private bool _extraTabInitialized;
+
+        private sealed record ExtraGameHotkeyDef(
+            string Command,
+            string Label,
+            string DefaultKey,
+            string DefaultModifiers,
+            ComboBox KeyCombo,
+            ComboBox ModCombo,
+            TextBlock ShortcutLabel);
+
+        private sealed record ExtraShortcutRow(
+            string Label,
+            ComboBox KeyCombo,
+            ComboBox ModCombo,
+            bool Active);
+
+        private ExtraGameHotkeyDef[] GetGameHotkeyDefs() => new[]
+        {
+            new ExtraGameHotkeyDef("SELECT_ALL", "Select all units", "KEY_Q", "NONE",
+                cmbSelectAllKey, cmbSelectAllMod, lblSelectAllShortcut),
+            new ExtraGameHotkeyDef("SELECT_ALL_AIRCRAFT", "Select aircraft", "KEY_W", "NONE",
+                cmbSelectAircraftKey, cmbSelectAircraftMod, lblSelectAircraftShortcut),
+            new ExtraGameHotkeyDef("SELECT_MATCHING_UNITS", "Select matching units", "KEY_E", "NONE",
+                cmbSelectMatchingKey, cmbSelectMatchingMod, lblSelectMatchingShortcut),
+            new ExtraGameHotkeyDef("SCATTER", "Scatter units", "KEY_X", "NONE",
+                cmbScatterKey, cmbScatterMod, lblScatterShortcut),
+            new ExtraGameHotkeyDef("STOP", "Stop", "KEY_S", "NONE",
+                cmbStopKey, cmbStopMod, lblStopShortcut),
+            new ExtraGameHotkeyDef("SELECT_HERO", "Select hero", "KEY_H", "CTRL",
+                cmbSelectHeroKey, cmbSelectHeroMod, lblSelectHeroShortcut),
+            new ExtraGameHotkeyDef("VIEW_COMMAND_CENTER", "View command center", "KEY_H", "NONE",
+                cmbViewCommandCenterKey, cmbViewCommandCenterMod, lblViewCommandCenterShortcut),
+            new ExtraGameHotkeyDef("CREATE_FORMATION", "Create formation", "KEY_F", "CTRL",
+                cmbCreateFormationKey, cmbCreateFormationMod, lblCreateFormationShortcut),
+        };
 
         private void InitExtraSettingsTab()
         {
             if (_extraTabInitialized) return;
             _extraTabInitialized = true;
 
-            foreach (var cb in new[] { cmbIdleWorkerKey, cmbBeaconKey })
+            var gameHotkeys = GetGameHotkeyDefs();
+
+            foreach (var cb in new[] { cmbIdleWorkerKey, cmbBeaconKey }.Concat(gameHotkeys.Select(d => d.KeyCombo)))
             {
                 cb.Items.Clear();
                 foreach (var k in _extraKeyValues) cb.Items.Add(k);
             }
-            foreach (var cb in new[] { cmbIdleWorkerMod, cmbBeaconMod })
+            foreach (var cb in new[] { cmbIdleWorkerMod, cmbBeaconMod }.Concat(gameHotkeys.Select(d => d.ModCombo)))
             {
                 cb.Items.Clear();
                 foreach (var m in _extraModValues) cb.Items.Add(m);
             }
 
-            cmbIdleWorkerKey.SelectionChanged += (_, _) =>
-                UpdateExtraShortcutLabel(lblIdleWorkerShortcut, cmbIdleWorkerKey, cmbIdleWorkerMod);
-            cmbIdleWorkerMod.SelectionChanged += (_, _) =>
-                UpdateExtraShortcutLabel(lblIdleWorkerShortcut, cmbIdleWorkerKey, cmbIdleWorkerMod);
-            cmbBeaconKey.SelectionChanged += (_, _) =>
-                UpdateExtraShortcutLabel(lblBeaconShortcut, cmbBeaconKey, cmbBeaconMod);
-            cmbBeaconMod.SelectionChanged += (_, _) =>
-                UpdateExtraShortcutLabel(lblBeaconShortcut, cmbBeaconKey, cmbBeaconMod);
+            foreach (var cb in new[] { cmbIdleWorkerKey, cmbIdleWorkerMod, cmbBeaconKey, cmbBeaconMod }
+                .Concat(gameHotkeys.SelectMany(d => new[] { d.KeyCombo, d.ModCombo })))
+            {
+                cb.SelectionChanged += (_, _) => UpdateExtraHotkeyLabelsAndValidation();
+            }
 
             string bigPath = FindInizHBig();
             _idleWorkerBigPath = bigPath;
@@ -3823,6 +3933,150 @@ namespace LauncherWinUI.Pages
                 lblIdleWorkerPath.Text = "(INIZH.big bulunamadı)";
                 lblBeaconPath.Text     = "(INIZH.big bulunamadı)";
             }
+
+            LoadGameCommandMapHotkeys(gameHotkeys);
+            UpdateExtraHotkeyLabelsAndValidation();
+        }
+
+        private void LoadGameCommandMapHotkeys(IReadOnlyList<ExtraGameHotkeyDef> defs)
+        {
+            string bigPath = FindEnglishZhBig();
+            _gameCommandMapBigPath = bigPath;
+            _gameCommandMapIniPath = null;
+
+            foreach (var def in defs)
+            {
+                SelectExtraCombo(def.KeyCombo, def.DefaultKey);
+                SelectExtraCombo(def.ModCombo, def.DefaultModifiers);
+            }
+
+            if (!File.Exists(bigPath))
+            {
+                lblGameHotkeyPath.Text = "(EnglishZH.big bulunamadı)";
+                btnSaveGameHotkeys.IsEnabled = false;
+                return;
+            }
+
+            var idx = new Dictionary<string, (int, int)>(StringComparer.OrdinalIgnoreCase);
+            CommandMapLocator.IndexBig(bigPath, idx);
+            _gameCommandMapIniPath =
+                idx.Keys.FirstOrDefault(k => string.Equals(
+                    k.Replace('/', '\\'),
+                    @"Data\English\CommandMap.ini",
+                    StringComparison.OrdinalIgnoreCase))
+                ?? GetFallbackCommandMapIni(bigPath);
+
+            if (_gameCommandMapIniPath == null)
+            {
+                lblGameHotkeyPath.Text = "(CommandMap.ini bulunamadı)";
+                btnSaveGameHotkeys.IsEnabled = false;
+                return;
+            }
+
+            byte[]? raw = CommandMapLocator.ReadEntry(bigPath, idx, _gameCommandMapIniPath);
+            string text = raw != null ? Encoding.UTF8.GetString(raw) : "";
+
+            foreach (var def in defs)
+            {
+                var entry = CommandMapParser.ParseBlock(text, def.Command);
+                if (entry == null) continue;
+
+                SelectExtraCombo(def.KeyCombo, entry.Key);
+                SelectExtraCombo(def.ModCombo, entry.Modifiers);
+            }
+
+            lblGameHotkeyPath.Text = _gameCommandMapIniPath;
+            btnSaveGameHotkeys.IsEnabled = true;
+        }
+
+        private IEnumerable<ExtraShortcutRow> GetExtraShortcutRows()
+        {
+            bool idleActive = _idleWorkerBigPath != null
+                           && _idleWorkerIniPath != null
+                           && File.Exists(_idleWorkerBigPath);
+            bool beaconActive = _idleWorkerBigPath != null
+                             && _beaconIniPath != null
+                             && File.Exists(_idleWorkerBigPath);
+            bool gameActive = _gameCommandMapBigPath != null
+                           && _gameCommandMapIniPath != null
+                           && File.Exists(_gameCommandMapBigPath);
+
+            yield return new ExtraShortcutRow("Select idle worker", cmbIdleWorkerKey, cmbIdleWorkerMod, idleActive);
+            yield return new ExtraShortcutRow("Beacon", cmbBeaconKey, cmbBeaconMod, beaconActive);
+
+            foreach (var def in GetGameHotkeyDefs())
+                yield return new ExtraShortcutRow(def.Label, def.KeyCombo, def.ModCombo, gameActive);
+        }
+
+        private static string ShortcutToken(ComboBox keyCb, ComboBox modCb)
+        {
+            string key = keyCb.SelectedItem as string ?? "";
+            string mod = modCb.SelectedItem as string ?? "NONE";
+            return $"{mod}|{key}";
+        }
+
+        private static string ShortcutDisplay(ComboBox keyCb, ComboBox modCb)
+        {
+            string key = keyCb.SelectedItem as string ?? "";
+            string mod = modCb.SelectedItem as string ?? "NONE";
+            string keyDisplay = key.StartsWith("KEY_") ? key[4..] : key;
+            string modDisplay = mod.Replace("_", " + ");
+            return mod == "NONE" ? keyDisplay : $"{modDisplay} + {keyDisplay}";
+        }
+
+        private bool TryFindExtraShortcutDuplicate(out string message)
+        {
+            var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var row in GetExtraShortcutRows().Where(r => r.Active))
+            {
+                string key = row.KeyCombo.SelectedItem as string ?? "";
+                if (string.IsNullOrWhiteSpace(key)) continue;
+
+                string token = ShortcutToken(row.KeyCombo, row.ModCombo);
+                if (seen.TryGetValue(token, out var other))
+                {
+                    message = $"Duplicate shortcut blocked: {other} and {row.Label} both use {ShortcutDisplay(row.KeyCombo, row.ModCombo)}.";
+                    return true;
+                }
+                seen[token] = row.Label;
+            }
+
+            message = "";
+            return false;
+        }
+
+        private void UpdateExtraHotkeyLabelsAndValidation()
+        {
+            UpdateExtraShortcutLabel(lblIdleWorkerShortcut, cmbIdleWorkerKey, cmbIdleWorkerMod);
+            UpdateExtraShortcutLabel(lblBeaconShortcut, cmbBeaconKey, cmbBeaconMod);
+
+            foreach (var def in GetGameHotkeyDefs())
+                UpdateExtraShortcutLabel(def.ShortcutLabel, def.KeyCombo, def.ModCombo);
+
+            bool duplicate = TryFindExtraShortcutDuplicate(out string duplicateMessage);
+
+            btnSaveIdleWorker.IsEnabled = _idleWorkerBigPath != null
+                                        && _idleWorkerIniPath != null
+                                        && File.Exists(_idleWorkerBigPath)
+                                        && !duplicate;
+            btnSaveBeacon.IsEnabled = _idleWorkerBigPath != null
+                                    && _beaconIniPath != null
+                                    && File.Exists(_idleWorkerBigPath)
+                                    && !duplicate;
+            btnSaveGameHotkeys.IsEnabled = _gameCommandMapBigPath != null
+                                         && _gameCommandMapIniPath != null
+                                         && File.Exists(_gameCommandMapBigPath)
+                                         && !duplicate;
+
+            if (duplicate)
+            {
+                ShowExtraStatus(lblGameHotkeysStatus, duplicateMessage, isError: true);
+            }
+            else if (lblGameHotkeysStatus.Text.StartsWith("Duplicate shortcut", StringComparison.OrdinalIgnoreCase))
+            {
+                lblGameHotkeysStatus.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void BtnSaveIdleWorker_Click(object sender, RoutedEventArgs e)
@@ -3830,6 +4084,13 @@ namespace LauncherWinUI.Pages
             string key       = cmbIdleWorkerKey.SelectedItem as string ?? "KEY_I";
             string mod       = cmbIdleWorkerMod.SelectedItem as string ?? "CTRL";
             string? targetIni = _idleWorkerIniPath ?? GetFallbackCommandMapIni(_idleWorkerBigPath);
+
+            if (TryFindExtraShortcutDuplicate(out string duplicateMessage))
+            {
+                ShowExtraStatus(lblIdleWorkerStatus, duplicateMessage, isError: true);
+                UpdateExtraHotkeyLabelsAndValidation();
+                return;
+            }
 
             if (targetIni == null || _idleWorkerBigPath == null || !File.Exists(_idleWorkerBigPath))
             {
@@ -3859,6 +4120,13 @@ namespace LauncherWinUI.Pages
             string? targetIni = _beaconIniPath ?? _idleWorkerIniPath
                                 ?? GetFallbackCommandMapIni(_idleWorkerBigPath);
 
+            if (TryFindExtraShortcutDuplicate(out string duplicateMessage))
+            {
+                ShowExtraStatus(lblBeaconStatus, duplicateMessage, isError: true);
+                UpdateExtraHotkeyLabelsAndValidation();
+                return;
+            }
+
             if (targetIni == null || _idleWorkerBigPath == null || !File.Exists(_idleWorkerBigPath))
             {
                 ShowExtraStatus(lblBeaconStatus, "HATA: INIZH.big bulunamadı.", isError: true);
@@ -3877,6 +4145,48 @@ namespace LauncherWinUI.Pages
             else
             {
                 ShowExtraStatus(lblBeaconStatus, "HATA: Blok kaydedilemedi.", isError: true);
+            }
+        }
+
+        private void BtnSaveGameHotkeys_Click(object sender, RoutedEventArgs e)
+        {
+            if (TryFindExtraShortcutDuplicate(out string duplicateMessage))
+            {
+                ShowExtraStatus(lblGameHotkeysStatus, duplicateMessage, isError: true);
+                UpdateExtraHotkeyLabelsAndValidation();
+                return;
+            }
+
+            if (_gameCommandMapBigPath == null
+             || _gameCommandMapIniPath == null
+             || !File.Exists(_gameCommandMapBigPath))
+            {
+                ShowExtraStatus(lblGameHotkeysStatus, "HATA: EnglishZH.big / CommandMap.ini bulunamadı.", isError: true);
+                return;
+            }
+
+            var updates = GetGameHotkeyDefs()
+                .Select(def => new CommandMapEditor.CommandMapUpdate(
+                    def.Command,
+                    def.KeyCombo.SelectedItem as string ?? def.DefaultKey,
+                    def.ModCombo.SelectedItem as string ?? def.DefaultModifiers))
+                .ToList();
+
+            byte[]? newBig = CommandMapEditor.SaveEntries(
+                _gameCommandMapBigPath,
+                _gameCommandMapIniPath,
+                updates);
+
+            if (newBig != null)
+            {
+                File.WriteAllBytes(_gameCommandMapBigPath, newBig);
+                ShowExtraStatus(lblGameHotkeysStatus, "Gameplay hotkeys saved to EnglishZH.big.", isError: false);
+                LoadGameCommandMapHotkeys(GetGameHotkeyDefs());
+                UpdateExtraHotkeyLabelsAndValidation();
+            }
+            else
+            {
+                ShowExtraStatus(lblGameHotkeysStatus, "HATA: CommandMap blokları kaydedilemedi.", isError: true);
             }
         }
 
