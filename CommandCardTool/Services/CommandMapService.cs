@@ -214,6 +214,12 @@ internal static class CommandMapLocator
 
 internal static class CommandMapEditor
 {
+    public readonly record struct CommandMapUpdate(
+        string Command,
+        string Key,
+        string Modifiers,
+        string UseableIn = "GAME");
+
     /// <summary>
     /// Updates (or appends) a CommandMap block inside a BIG file and returns the
     /// new BIG bytes.  Returns null if the target entry is not found.
@@ -245,6 +251,47 @@ internal static class CommandMapEditor
                 string text    = Encoding.UTF8.GetString(raw);
                 string updated = CommandMapParser.UpsertBlock(text, command, key, modifiers, useableIn);
                 bodies[name] = Encoding.UTF8.GetBytes(updated);
+            }
+            else
+            {
+                bodies[name] = raw;
+            }
+        }
+
+        return BigBuilder.Build(idx.Keys.ToList(), bodies);
+    }
+
+    /// <summary>
+    /// Updates several CommandMap blocks inside one INI entry and returns rebuilt BIG bytes.
+    /// </summary>
+    public static byte[]? SaveEntries(
+        string bigPath,
+        string targetEntryName,
+        IEnumerable<CommandMapUpdate> updates)
+    {
+        if (!File.Exists(bigPath)) return null;
+
+        var updateList = updates.ToList();
+        if (updateList.Count == 0) return null;
+
+        var idx = new Dictionary<string, (int Offset, int Size)>(StringComparer.OrdinalIgnoreCase);
+        CommandMapLocator.IndexBig(bigPath, idx);
+
+        if (!idx.ContainsKey(targetEntryName)) return null;
+
+        var bodies = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, _) in idx)
+        {
+            byte[]? raw = CommandMapLocator.ReadEntry(bigPath, idx, name);
+            if (raw == null) continue;
+
+            if (string.Equals(name, targetEntryName, StringComparison.OrdinalIgnoreCase))
+            {
+                string text = Encoding.UTF8.GetString(raw);
+                foreach (var update in updateList)
+                    text = CommandMapParser.UpsertBlock(
+                        text, update.Command, update.Key, update.Modifiers, update.UseableIn);
+                bodies[name] = Encoding.UTF8.GetBytes(text);
             }
             else
             {

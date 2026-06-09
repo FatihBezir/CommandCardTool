@@ -668,6 +668,93 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Gameplay CommandMap Hotkeys -->
+                    <Border Background="#07091C" BorderBrush="#1A2A50" BorderThickness="1"
+                            Padding="16,14" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="Gameplay Selection / Control Keys" FontSize="13" FontWeight="Bold"
+                                       Foreground="#C8D6E5" Margin="0,0,0,6"/>
+                            <TextBlock Text="Changes CommandMap.ini inside EnglishZH.big. Duplicate key combinations are blocked."
+                                       FontSize="11" Foreground="#8888AA" TextWrapping="Wrap"
+                                       Margin="0,0,0,10"/>
+
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="14"/>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="18"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="30"/>
+                                    <RowDefinition Height="30"/>
+                                    <RowDefinition Height="30"/>
+                                    <RowDefinition Height="30"/>
+                                    <RowDefinition Height="30"/>
+                                    <RowDefinition Height="30"/>
+                                    <RowDefinition Height="30"/>
+                                    <RowDefinition Height="30"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Select all units" Foreground="#C8D6E5" FontSize="11" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="cmbSelectAllKey" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <ComboBox Grid.Row="0" Grid.Column="3" x:Name="cmbSelectAllMod" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <TextBlock Grid.Row="0" Grid.Column="5" x:Name="lblSelectAllShortcut" Text="-" Foreground="#00d4ff" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Select aircraft" Foreground="#C8D6E5" FontSize="11" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="cmbSelectAircraftKey" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <ComboBox Grid.Row="1" Grid.Column="3" x:Name="cmbSelectAircraftMod" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <TextBlock Grid.Row="1" Grid.Column="5" x:Name="lblSelectAircraftShortcut" Text="-" Foreground="#00d4ff" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Select matching units" Foreground="#C8D6E5" FontSize="11" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="cmbSelectMatchingKey" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <ComboBox Grid.Row="2" Grid.Column="3" x:Name="cmbSelectMatchingMod" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <TextBlock Grid.Row="2" Grid.Column="5" x:Name="lblSelectMatchingShortcut" Text="-" Foreground="#00d4ff" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Scatter units" Foreground="#C8D6E5" FontSize="11" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="3" Grid.Column="1" x:Name="cmbScatterKey" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <ComboBox Grid.Row="3" Grid.Column="3" x:Name="cmbScatterMod" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <TextBlock Grid.Row="3" Grid.Column="5" x:Name="lblScatterShortcut" Text="-" Foreground="#00d4ff" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Stop" Foreground="#C8D6E5" FontSize="11" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="4" Grid.Column="1" x:Name="cmbStopKey" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <ComboBox Grid.Row="4" Grid.Column="3" x:Name="cmbStopMod" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <TextBlock Grid.Row="4" Grid.Column="5" x:Name="lblStopShortcut" Text="-" Foreground="#00d4ff" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Select hero" Foreground="#C8D6E5" FontSize="11" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="5" Grid.Column="1" x:Name="cmbSelectHeroKey" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <ComboBox Grid.Row="5" Grid.Column="3" x:Name="cmbSelectHeroMod" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <TextBlock Grid.Row="5" Grid.Column="5" x:Name="lblSelectHeroShortcut" Text="-" Foreground="#00d4ff" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="6" Grid.Column="0" Text="View command center" Foreground="#C8D6E5" FontSize="11" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="6" Grid.Column="1" x:Name="cmbViewCommandCenterKey" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <ComboBox Grid.Row="6" Grid.Column="3" x:Name="cmbViewCommandCenterMod" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <TextBlock Grid.Row="6" Grid.Column="5" x:Name="lblViewCommandCenterShortcut" Text="-" Foreground="#00d4ff" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Row="7" Grid.Column="0" Text="Create formation" Foreground="#C8D6E5" FontSize="11" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="7" Grid.Column="1" x:Name="cmbCreateFormationKey" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <ComboBox Grid.Row="7" Grid.Column="3" x:Name="cmbCreateFormationMod" Background="#1E1E2E" Foreground="White" BorderBrush="#404060" FontSize="12"/>
+                                <TextBlock Grid.Row="7" Grid.Column="5" x:Name="lblCreateFormationShortcut" Text="-" Foreground="#00d4ff" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="btnSaveGameHotkeys" Content="Apply to BIG"
+                                        Height="34" Padding="16,0"
+                                        Background="#01031A" Foreground="White" BorderBrush="#2980FF"
+                                        BorderThickness="2" Cursor="Hand"
+                                        IsEnabled="False" Click="BtnSaveGameHotkeys_Click"/>
+                                <TextBlock x:Name="lblGameHotkeyPath" Text="" Foreground="#404070"
+                                           FontSize="10" Margin="12,0,0,0" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <TextBlock x:Name="lblGameHotkeysStatus" Text="" FontSize="11"
+                                       Foreground="#55CC88" Margin="0,8,0,0" TextWrapping="Wrap"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Nuke Battlemaster Fix -->
                     <Border Background="#07091C" BorderBrush="#1A2A50" BorderThickness="1"
                             Padding="16,14" Margin="0,0,0,14">

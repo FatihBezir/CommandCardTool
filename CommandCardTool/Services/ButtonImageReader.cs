@@ -600,7 +600,7 @@ internal static class ButtonImageReader
         ["spectregunshipfromshortcut"]   = "SASpGunship",
         ["paradrop"]                     = "SACParatroopers",
         ["daisycutter"]                  = "SACDaisyCutter",
-        ["spydrone"]                     = "SAScout",
+        ["spydrone"]                     = "SASpyDrone",
         ["spysatellite"]                 = "SSSpySat",
         ["nohotkeyspysatellite"]         = "SSSpySat",
         ["ciaintelligence"]              = "SSCIA",
@@ -625,7 +625,7 @@ internal static class ButtonImageReader
         ["usaspectregunship3"]  = "SASpGunship3",
         ["usastealthfighter"]   = "SAStealth_L",
         ["usapaladin"]          = "SAPaladin_L",
-        ["usaspydrone"]         = "SAScout",
+        ["usaspydrone"]         = "SASpyDrone",
         ["usapathfinder"]       = "SAPathFinder1",
 
         // USA battle plans
@@ -684,9 +684,10 @@ internal static class ButtonImageReader
         ["chinaartillerytraining"]         = "SSArtilleryTraining",
         ["nuke_chinacarpetbomb"]           = "SSNkeCrptBmb",
         ["nuke_constructglatankbattlemaster"] = "SNNukeBtleMstr_L",
-        ["chinatankparadrop1"]             = "SACParatroopers",
-        ["chinatankparadrop2"]             = "SACParatroopers2",
-        ["chinatankparadrop3"]             = "SACParatroopers3",
+        ["tankparadrop"]                   = "SSTankDrop",
+        ["chinatankparadrop1"]             = "SSTankDrop",
+        ["chinatankparadrop2"]             = "SSTankDrop2",
+        ["chinatankparadrop3"]             = "SSTankDrop3",
 
         // China upgrades
         ["upgradechinachainguns"]          = "SSChainGuns",
