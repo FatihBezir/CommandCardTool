@@ -220,6 +220,12 @@ internal static class CommandMapEditor
         string Modifiers,
         string UseableIn = "GAME");
 
+    public sealed record EffectiveEntry(
+        string BigPath,
+        string EntryName,
+        string Text,
+        bool FromOverride);
+
     /// <summary>
     /// Updates (or appends) a CommandMap block inside a BIG file and returns the
     /// new BIG bytes.  Returns null if the target entry is not found.
@@ -301,6 +307,141 @@ internal static class CommandMapEditor
 
         return BigBuilder.Build(idx.Keys.ToList(), bodies);
     }
+
+    /// <summary>
+    /// Reads an entry from !EnglishZH.big when present, otherwise from the base BIG.
+    /// </summary>
+    public static EffectiveEntry? ReadEffectiveEntry(string baseBigPath, string targetEntryName)
+    {
+        if (!File.Exists(baseBigPath)) return null;
+
+        string overrideBigPath = GetOverrideBigPath(baseBigPath);
+        if (TryReadEntryText(overrideBigPath, targetEntryName, out string? overrideName, out string? overrideText))
+            return new EffectiveEntry(overrideBigPath, overrideName!, overrideText!, FromOverride: true);
+
+        if (TryReadEntryText(baseBigPath, targetEntryName, out string? baseName, out string? baseText))
+            return new EffectiveEntry(baseBigPath, baseName!, baseText!, FromOverride: false);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Writes updated CommandMap blocks into a !-prefixed override BIG, preserving
+    /// any existing override entries instead of modifying the original BIG.
+    /// </summary>
+    public static string? SaveEntriesToOverride(
+        string baseBigPath,
+        string targetEntryName,
+        IEnumerable<CommandMapUpdate> updates)
+    {
+        if (!File.Exists(baseBigPath)) return null;
+
+        var updateList = updates.ToList();
+        if (updateList.Count == 0) return null;
+
+        string overrideBigPath = GetOverrideBigPath(baseBigPath);
+        var names = new List<string>();
+        var bodies = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+
+        void Upsert(string name, byte[] body)
+        {
+            if (!bodies.ContainsKey(name))
+                names.Add(name);
+            bodies[name] = body;
+        }
+
+        if (File.Exists(overrideBigPath))
+        {
+            var overrideIdx = new Dictionary<string, (int Offset, int Size)>(StringComparer.OrdinalIgnoreCase);
+            CommandMapLocator.IndexBig(overrideBigPath, overrideIdx);
+            foreach (var name in overrideIdx.Keys)
+            {
+                byte[]? body = CommandMapLocator.ReadEntry(overrideBigPath, overrideIdx, name);
+                if (body != null) Upsert(name, body);
+            }
+        }
+
+        string? actualEntryName = FindEntryName(overrideBigPath, targetEntryName)
+                               ?? FindEntryName(baseBigPath, targetEntryName);
+        if (actualEntryName == null) return null;
+
+        byte[]? raw = null;
+        if (File.Exists(overrideBigPath))
+        {
+            var overrideIdx = new Dictionary<string, (int Offset, int Size)>(StringComparer.OrdinalIgnoreCase);
+            CommandMapLocator.IndexBig(overrideBigPath, overrideIdx);
+            raw = CommandMapLocator.ReadEntry(overrideBigPath, overrideIdx, actualEntryName);
+        }
+
+        if (raw == null)
+        {
+            var baseIdx = new Dictionary<string, (int Offset, int Size)>(StringComparer.OrdinalIgnoreCase);
+            CommandMapLocator.IndexBig(baseBigPath, baseIdx);
+            raw = CommandMapLocator.ReadEntry(baseBigPath, baseIdx, actualEntryName);
+        }
+
+        if (raw == null) return null;
+
+        string text = Encoding.UTF8.GetString(raw);
+        foreach (var update in updateList)
+            text = CommandMapParser.UpsertBlock(
+                text, update.Command, update.Key, update.Modifiers, update.UseableIn);
+
+        Upsert(actualEntryName, Encoding.UTF8.GetBytes(text));
+
+        byte[] newBig = BigBuilder.Build(names, bodies);
+        File.WriteAllBytes(overrideBigPath, newBig);
+        return overrideBigPath;
+    }
+
+    private static string GetOverrideBigPath(string baseBigPath)
+    {
+        string dir = Path.GetDirectoryName(baseBigPath) ?? "";
+        string name = Path.GetFileName(baseBigPath);
+        if (!name.StartsWith("!", StringComparison.Ordinal))
+            name = "!" + name;
+        return Path.Combine(dir, name);
+    }
+
+    private static bool TryReadEntryText(
+        string bigPath,
+        string targetEntryName,
+        out string? actualEntryName,
+        out string? text)
+    {
+        actualEntryName = null;
+        text = null;
+        if (!File.Exists(bigPath)) return false;
+
+        var idx = new Dictionary<string, (int Offset, int Size)>(StringComparer.OrdinalIgnoreCase);
+        CommandMapLocator.IndexBig(bigPath, idx);
+        actualEntryName = FindEntryName(idx.Keys, targetEntryName);
+        if (actualEntryName == null) return false;
+
+        byte[]? raw = CommandMapLocator.ReadEntry(bigPath, idx, actualEntryName);
+        if (raw == null) return false;
+
+        text = Encoding.UTF8.GetString(raw);
+        return true;
+    }
+
+    private static string? FindEntryName(string bigPath, string targetEntryName)
+    {
+        if (!File.Exists(bigPath)) return null;
+        var idx = new Dictionary<string, (int Offset, int Size)>(StringComparer.OrdinalIgnoreCase);
+        CommandMapLocator.IndexBig(bigPath, idx);
+        return FindEntryName(idx.Keys, targetEntryName);
+    }
+
+    private static string? FindEntryName(IEnumerable<string> names, string targetEntryName)
+    {
+        string normalizedTarget = NormalizeEntryName(targetEntryName);
+        return names.FirstOrDefault(name =>
+            string.Equals(NormalizeEntryName(name), normalizedTarget, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string NormalizeEntryName(string name)
+        => name.Replace('/', '\\');
 }
 
 // ── CommandButton patcher — fixes ButtonImage in CommandButton.ini ────────────

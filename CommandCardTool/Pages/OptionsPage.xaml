@@ -755,6 +755,36 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Experimental Alt+F4 Close -->
+                    <Border Background="#07091C" BorderBrush="#1A2A50" BorderThickness="1"
+                            Padding="16,14" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="Experimental Alt+F4 Close" FontSize="13" FontWeight="Bold"
+                                       Foreground="#C8D6E5" Margin="0,0,0,6"/>
+                            <TextBlock Text="Maps DEMO_INSTANT_QUIT in EnglishZH.big to ALT + F4. Use Revert to restore CTRL + SHIFT + BACKSPACE."
+                                       FontSize="11" Foreground="#8888AA" TextWrapping="Wrap"
+                                       Margin="0,0,0,10"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="btnEnableAltF4Close" Content="Activate Alt+F4"
+                                        Height="34" Padding="16,0"
+                                        Background="#01031A" Foreground="White" BorderBrush="#2980FF"
+                                        BorderThickness="2" Cursor="Hand"
+                                        IsEnabled="False" Click="BtnEnableAltF4Close_Click"/>
+                                <Button x:Name="btnRevertAltF4Close" Content="Revert"
+                                        Height="34" Padding="16,0" Margin="8,0,0,0"
+                                        Background="#01031A" Foreground="White" BorderBrush="#2980FF"
+                                        BorderThickness="2" Cursor="Hand"
+                                        IsEnabled="False" Click="BtnRevertAltF4Close_Click"/>
+                                <TextBlock x:Name="lblAltF4ClosePath" Text="" Foreground="#404070"
+                                           FontSize="10" Margin="12,0,0,0" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <TextBlock x:Name="lblAltF4CloseStatus" Text="" FontSize="11"
+                                       Foreground="#55CC88" Margin="0,8,0,0" TextWrapping="Wrap"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Nuke Battlemaster Fix -->
                     <Border Background="#07091C" BorderBrush="#1A2A50" BorderThickness="1"
                             Padding="16,14" Margin="0,0,0,14">
@@ -903,6 +933,162 @@
                     <TextBlock x:Name="lblCommandCardStatus"
                                Foreground="#55CC88" FontSize="11" Margin="0,6,0,0"
                                Visibility="Collapsed" TextWrapping="Wrap"/>
+
+                    <!-- Hotkey Image Style -->
+                    <Border Background="#070D22" BorderBrush="#1A2A50" BorderThickness="1"
+                            Padding="10,8" Margin="0,8,0,0" CornerRadius="2">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Settings column -->
+                            <StackPanel Grid.Column="0">
+
+                                <!-- Category tab strip -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="STYLE /" Foreground="#5577AA"
+                                               FontSize="10" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <RadioButton x:Name="rbStyleBuildings" Content="Buildings"
+                                                 GroupName="StyleCat" IsChecked="True"
+                                                 FontSize="10" FontFamily="Segoe UI"
+                                                 Foreground="#8899BB" VerticalAlignment="Center"
+                                                 Checked="StyleCategoryChanged"/>
+                                    <RadioButton x:Name="rbStyleUnits" Content="Units"
+                                                 GroupName="StyleCat" Margin="6,0,0,0"
+                                                 FontSize="10" FontFamily="Segoe UI"
+                                                 Foreground="#8899BB" VerticalAlignment="Center"
+                                                 Checked="StyleCategoryChanged"/>
+                                    <RadioButton x:Name="rbStyleStarPowers" Content="Stars"
+                                                 GroupName="StyleCat" Margin="6,0,0,0"
+                                                 FontSize="10" FontFamily="Segoe UI"
+                                                 Foreground="#8899BB" VerticalAlignment="Center"
+                                                 Checked="StyleCategoryChanged"/>
+                                    <RadioButton x:Name="rbStyleSpecialActions" Content="Sell / Move"
+                                                 GroupName="StyleCat" Margin="6,0,0,0"
+                                                 FontSize="10" FontFamily="Segoe UI"
+                                                 Foreground="#8899BB" VerticalAlignment="Center"
+                                                 ToolTip="Sell, Attack Move, Stop and other CONTROLBAR: action buttons"
+                                                 Checked="StyleCategoryChanged"/>
+                                </StackPanel>
+
+                                <!-- Font row -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
+                                    <TextBlock Text="Font:" Foreground="#8888AA" FontSize="11"
+                                               Width="88" VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="cmbHotkeyFont" Width="130" FontSize="11"
+                                              Background="#1E1E2E" Foreground="White"
+                                              BorderBrush="#404060"
+                                              SelectionChanged="CmbHotkeyFont_SelectionChanged"/>
+                                </StackPanel>
+
+                                <!-- Letter size row -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
+                                    <TextBlock Text="Letter size:" Foreground="#8888AA" FontSize="11"
+                                               Width="88" VerticalAlignment="Center"/>
+                                    <Slider x:Name="sliderLetterSize" Minimum="40" Maximum="130"
+                                            Value="85" Width="110" VerticalAlignment="Center"
+                                            Foreground="#2980FF"
+                                            ValueChanged="SliderLetterSize_ValueChanged"/>
+                                    <TextBlock x:Name="lblLetterSizePct" Text="85%"
+                                               Foreground="#8888AA" FontSize="11"
+                                               VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                </StackPanel>
+
+                                <!-- Letter color row -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
+                                    <TextBlock Text="Letter color:" Foreground="#8888AA" FontSize="11"
+                                               Width="88" VerticalAlignment="Center"/>
+                                    <Border x:Name="bordPickLetterColor"
+                                            Width="60" Height="22" CornerRadius="2" Cursor="Hand"
+                                            Background="White" BorderBrush="#606080" BorderThickness="1"
+                                            ToolTip="Click to choose letter color"
+                                            MouseLeftButtonDown="BordPickLetterColor_MouseDown"/>
+                                    <TextBlock x:Name="lblLetterColorHex" Text="#FFFFFF"
+                                               Foreground="#666688" FontSize="10" FontFamily="Consolas"
+                                               VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                </StackPanel>
+
+                                <!-- Box color row -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
+                                    <TextBlock Text="Box color:" Foreground="#8888AA" FontSize="11"
+                                               Width="88" VerticalAlignment="Center"/>
+                                    <Border x:Name="bordPickBoxColor"
+                                            Width="60" Height="22" CornerRadius="2" Cursor="Hand"
+                                            Background="Black" BorderBrush="#606080" BorderThickness="1"
+                                            ToolTip="Click to choose box color"
+                                            MouseLeftButtonDown="BordPickBoxColor_MouseDown"/>
+                                    <TextBlock x:Name="lblBoxColorHex" Text="#000000"
+                                               Foreground="#666688" FontSize="10" FontFamily="Consolas"
+                                               VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                </StackPanel>
+
+                                <!-- Box opacity row -->
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="Box opacity:" Foreground="#8888AA" FontSize="11"
+                                               Width="88" VerticalAlignment="Center"/>
+                                    <Slider x:Name="sliderBoxOpacity" Minimum="0" Maximum="255"
+                                            Value="199" Width="110" VerticalAlignment="Center"
+                                            Foreground="#2980FF"
+                                            ValueChanged="SliderBoxOpacity_ValueChanged"/>
+                                    <TextBlock x:Name="lblBoxOpacityPct" Text="78%"
+                                               Foreground="#8888AA" FontSize="11"
+                                               VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Live preview column -->
+                            <StackPanel Grid.Column="1" Margin="14,0,0,0"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="Preview" Foreground="#5577AA"
+                                           FontSize="10" FontFamily="Segoe UI"
+                                           HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                <Border BorderBrush="#2A2A55" BorderThickness="1" CornerRadius="2"
+                                        Width="80" Height="80">
+                                    <Image x:Name="imgHotkeyPreview"
+                                           Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Color picker popup -->
+                    <Popup x:Name="colorPickerPopup" StaysOpen="True"
+                           Placement="Bottom" VerticalOffset="4">
+                        <Border Background="#0D1428" BorderBrush="#2A3A6A" BorderThickness="1"
+                                CornerRadius="4" Padding="8">
+                            <StackPanel>
+                                <TextBlock x:Name="lblPickerTitle" Text="Pick a color"
+                                           Foreground="#8899BB" FontSize="10" FontFamily="Segoe UI"
+                                           FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <!-- Swatch grid (built in code-behind) -->
+                                <WrapPanel x:Name="pickerSwatchPanel" Width="192"/>
+                                <!-- Hex input row -->
+                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="#" Foreground="#8888AA" FontSize="11"
+                                               VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                    <TextBox x:Name="txtPickerHex" Width="60" FontSize="11"
+                                             FontFamily="Consolas"
+                                             Background="#1E1E2E" Foreground="White"
+                                             BorderBrush="#404060" BorderThickness="1"
+                                             Padding="4,2" MaxLength="6" CaretBrush="White"
+                                             ToolTip="Enter hex color without #"
+                                             TextChanged="TxtPickerHex_TextChanged"/>
+                                    <Border x:Name="bordPickerPreview" Width="22" Height="22"
+                                            Margin="4,0,4,0" CornerRadius="2"
+                                            Background="White" BorderBrush="#404060" BorderThickness="1"/>
+                                    <Button Content="OK" Padding="10,2" FontSize="11"
+                                            Background="#1A3060" Foreground="White"
+                                            BorderBrush="#2980FF" BorderThickness="1"
+                                            Cursor="Hand" Click="BtnPickerOk_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
                     </StackPanel>
 
                     <!-- Tümü: şablon kartlar | Ordu: bina/ünite listesi -->

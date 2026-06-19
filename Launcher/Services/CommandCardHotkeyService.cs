@@ -97,7 +97,9 @@ internal static class CommandCardHotkeyService
     }
 
     /// <summary>Aynı atlas dosyasındaki birden fazla bölgeye sırayla kısayol harfi boyar.</summary>
-    public static Dictionary<string, byte[]> BuildTgaPatches(IEnumerable<SlotBinding> bindings)
+    public static Dictionary<string, byte[]> BuildTgaPatches(
+        IEnumerable<SlotBinding> bindings,
+        HotkeyStyle? style = null)
     {
         var atlasBytes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
 
@@ -116,7 +118,7 @@ internal static class CommandCardHotkeyService
             }
 
             atlasBytes[info.EntryName] = TgaPatcher.PaintHotkey(
-                bytes, info.Left, info.Top, info.Right, info.Bottom, hk);
+                bytes, info.Left, info.Top, info.Right, info.Bottom, hk, style);
         }
 
         return atlasBytes;

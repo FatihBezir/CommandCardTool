@@ -7,10 +7,18 @@ using System.Windows.Media.Imaging;
 namespace LauncherWinUI.Services;
 
 /// <summary>
+/// Visual style for the hotkey letter painted on button images.
+/// </summary>
+internal record HotkeyStyle(Color LetterColor, string FontFamily, Color BoxColor, byte BoxAlpha = 199, double LetterSizeRatio = 0.85)
+{
+    public static readonly HotkeyStyle Default = new(Colors.White, "Arial", Colors.Black);
+}
+
+/// <summary>
 /// Draws a hotkey letter on a cropped button icon BitmapSource,
 /// matching the web app's drawLetterOnImage() behaviour exactly:
 ///   • Semi-transparent black box (alpha=199) in the bottom-left corner.
-///   • White bold Arial letter centred inside the box.
+///   • Bold letter centred inside the box (font/color configurable via HotkeyStyle).
 ///   • Box width  = max(floor(btnW × 0.28), 16)
 ///   • Box height = max(floor(btnH × 0.30), 16)
 ///   • boxX = left edge (0 when source is already a cropped icon)
@@ -21,18 +29,22 @@ internal static class HotkeyPainter
     /// <summary>
     /// Overlays the hotkey letter onto <paramref name="source"/> and returns a new frozen BitmapSource.
     /// Returns <paramref name="source"/> unchanged when <paramref name="letter"/> is '\0'.
+    /// Pass a <paramref name="style"/> to customise the letter colour and font; defaults to white Arial.
     /// </summary>
-    public static BitmapSource Paint(BitmapSource source, char letter)
+    public static BitmapSource Paint(BitmapSource source, char letter, HotkeyStyle? style = null)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
         if (letter == '\0') return source;
 
+        var s = style ?? HotkeyStyle.Default;
+
         double w = source.PixelWidth;
         double h = source.PixelHeight;
 
-        // Mirrors JS: Math.max(Math.floor(btnW * 0.28), 16)
-        double boxW = Math.Max(Math.Floor(w * 0.28), 16);
-        double boxH = Math.Max(Math.Floor(h * 0.30), 16);
+        // Box scales with letter size (default ratio = 0.85)
+        double sizeScale = s.LetterSizeRatio / 0.85;
+        double boxW = Math.Max(Math.Floor(w * 0.28 * sizeScale), 12);
+        double boxH = Math.Max(Math.Floor(h * 0.30 * sizeScale), 12);
         double boxX = 0;          // left edge of icon
         double boxY = h - boxH;   // bottom edge of icon
 
@@ -42,16 +54,16 @@ internal static class HotkeyPainter
             // 1. Draw original icon
             dc.DrawImage(source, new Rect(0, 0, w, h));
 
-            // 2. Semi-transparent black box (a=199 → ~78% opacity)
+            // 2. Semi-transparent box
             dc.DrawRectangle(
-                new SolidColorBrush(Color.FromArgb(199, 0, 0, 0)),
+                new SolidColorBrush(Color.FromArgb(s.BoxAlpha, s.BoxColor.R, s.BoxColor.G, s.BoxColor.B)),
                 null,
                 new Rect(boxX, boxY, boxW, boxH));
 
-            // 3. White bold Arial letter centred in the box
-            double fontSize = Math.Max(Math.Floor(boxH * 0.85), 8.0);
+            // 3. Bold letter centred in the box
+            double fontSize = Math.Max(Math.Floor(boxH * s.LetterSizeRatio), 8.0);
             var typeface = new Typeface(
-                new FontFamily("Arial"),
+                new FontFamily(s.FontFamily),
                 FontStyles.Normal,
                 FontWeights.Bold,
                 FontStretches.Normal);
@@ -62,7 +74,7 @@ internal static class HotkeyPainter
                 FlowDirection.LeftToRight,
                 typeface,
                 fontSize,
-                Brushes.White,
+                new SolidColorBrush(s.LetterColor),
                 1.0);  // pixelsPerDip=1 (96 DPI baseline)
 
             // Centre horizontally and vertically inside the box

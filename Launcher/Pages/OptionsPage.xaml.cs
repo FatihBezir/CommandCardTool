@@ -2107,6 +2107,7 @@ namespace LauncherWinUI.Pages
         private string _currentEditCsfKey  = "";
         private bool _suppressSlotEditor;
         private bool _commandCardBusy;
+        private HotkeyStyle _hotkeyStyle = HotkeyStyle.Default;
         private string _slotTextAtFocus = "";
         private readonly Stack<string> _slotLabelUndo = new();
 
@@ -2168,6 +2169,190 @@ namespace LauncherWinUI.Pages
                 cmbCommandCardArmy.Items.Add(army);
             if (cmbCommandCardArmy.Items.Count > 0)
                 cmbCommandCardArmy.SelectedIndex = 0;
+
+            InitHotkeyStylePanel();
+        }
+
+        // ── Hotkey Image Style ───────────────────────────────────────────────
+
+        private Color _letterColor = Colors.White;
+        private Color _boxColor    = Colors.Black;
+        private Action<Color>? _colorPickerCallback;
+        private bool _pickerHexChanging;
+
+        private static readonly string[] PickerColors =
+        [
+            "#FFFFFF","#CCCCCC","#999999","#666666","#444444","#222222","#111111","#000000",
+            "#FFFF66","#FFDD33","#FFAA00","#FF7700","#FF4400","#FF2200","#FF0000","#CC0000",
+            "#00FF88","#00EE44","#00CC00","#00AAAA","#00D4FF","#00AAFF","#55CCFF","#AAEEFF",
+            "#5566FF","#3344FF","#6600FF","#AA00FF","#FF00FF","#FF00AA","#FF0066","#FF3344",
+        ];
+
+        private void InitHotkeyStylePanel()
+        {
+            var fonts = new[]
+            {
+                "Arial", "Segoe UI", "Tahoma", "Verdana",
+                "Impact", "Consolas", "Courier New", "Times New Roman",
+            };
+            cmbHotkeyFont.ItemsSource = fonts;
+            cmbHotkeyFont.SelectedIndex = 0;
+
+            foreach (var hex in PickerColors)
+            {
+                var c = ParseHexColor(hex) ?? Colors.White;
+                var swatch = new Border
+                {
+                    Width = 22, Height = 22,
+                    Margin = new Thickness(1),
+                    Background = new SolidColorBrush(c),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x50)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(2),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    ToolTip = hex,
+                };
+                swatch.MouseLeftButtonDown += (_, _) => ApplyPickerColor(c);
+                pickerSwatchPanel.Children.Add(swatch);
+            }
+
+            ApplyLetterColor(Colors.White);
+            ApplyBoxColor(Colors.Black);
+            UpdateHotkeyStyle();
+        }
+
+        private void BordPickLetterColor_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            _colorPickerCallback = c => ApplyLetterColor(c);
+            OpenColorPicker(bordPickLetterColor, _letterColor, "Letter Color");
+        }
+
+        private void BordPickBoxColor_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            _colorPickerCallback = c => ApplyBoxColor(c);
+            OpenColorPicker(bordPickBoxColor, _boxColor, "Box Color");
+        }
+
+        private void OpenColorPicker(UIElement target, Color current, string title)
+        {
+            lblPickerTitle.Text = title;
+            colorPickerPopup.PlacementTarget = target;
+            _pickerHexChanging = true;
+            txtPickerHex.Text = $"{current.R:X2}{current.G:X2}{current.B:X2}";
+            _pickerHexChanging = false;
+            bordPickerPreview.Background = new SolidColorBrush(current);
+            colorPickerPopup.IsOpen = true;
+            txtPickerHex.Focus();
+            txtPickerHex.SelectAll();
+        }
+
+        private void ApplyPickerColor(Color c)
+        {
+            _colorPickerCallback?.Invoke(c);
+            colorPickerPopup.IsOpen = false;
+        }
+
+        private void BtnPickerOk_Click(object sender, RoutedEventArgs e)
+        {
+            var c = ParseHexColor(txtPickerHex.Text);
+            if (c.HasValue) ApplyPickerColor(c.Value);
+            else colorPickerPopup.IsOpen = false;
+        }
+
+        private void TxtPickerHex_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_pickerHexChanging) return;
+            var c = ParseHexColor(txtPickerHex.Text);
+            if (bordPickerPreview != null)
+                bordPickerPreview.Background = c.HasValue
+                    ? new SolidColorBrush(c.Value)
+                    : Brushes.Transparent;
+        }
+
+        private void ApplyLetterColor(Color c)
+        {
+            _letterColor = c;
+            if (bordPickLetterColor != null)
+                bordPickLetterColor.Background = new SolidColorBrush(c);
+            if (lblLetterColorHex != null)
+                lblLetterColorHex.Text = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            UpdateHotkeyStyle();
+        }
+
+        private void ApplyBoxColor(Color c)
+        {
+            _boxColor = c;
+            if (bordPickBoxColor != null)
+                bordPickBoxColor.Background = new SolidColorBrush(c);
+            if (lblBoxColorHex != null)
+                lblBoxColorHex.Text = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            UpdateHotkeyStyle();
+        }
+
+        private void CmbHotkeyFont_SelectionChanged(object sender, SelectionChangedEventArgs e)
+            => UpdateHotkeyStyle();
+
+        private void SliderBoxOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (lblBoxOpacityPct != null)
+                lblBoxOpacityPct.Text = $"{(int)Math.Round(e.NewValue / 255.0 * 100)}%";
+            UpdateHotkeyStyle();
+        }
+
+        private void UpdateHotkeyStyle()
+        {
+            string fontFamily = cmbHotkeyFont?.SelectedItem as string ?? "Arial";
+            byte alpha = sliderBoxOpacity != null
+                ? (byte)Math.Clamp((int)sliderBoxOpacity.Value, 0, 255)
+                : (byte)199;
+
+            _hotkeyStyle = new HotkeyStyle(_letterColor, fontFamily, _boxColor, alpha);
+            RefreshHotkeyPreview();
+        }
+
+        private void RefreshHotkeyPreview()
+        {
+            if (imgHotkeyPreview == null) return;
+            const int size = 64;
+            BitmapSource? bg = null;
+            if (!string.IsNullOrEmpty(_currentEditCsfId) && !string.IsNullOrEmpty(_currentEditArmy))
+                bg = ButtonImageReader.GetSlotImage(_currentEditCsfId, _currentEditArmy);
+            bg ??= BuildSampleButtonBitmap(size);
+            imgHotkeyPreview.Source = HotkeyPainter.Paint(bg, 'A', _hotkeyStyle);
+        }
+
+        private static BitmapSource BuildSampleButtonBitmap(int size)
+        {
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x0C, 0x18, 0x30)),
+                    null, new Rect(0, 0, size, size));
+                dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(30, 0x80, 0xC0, 0xFF)),
+                    null, new Rect(1, 1, size - 2, size / 2.0 - 1));
+                dc.DrawRectangle(null,
+                    new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x88, 0xA8)), 1.5),
+                    new Rect(0.75, 0.75, size - 1.5, size - 1.5));
+            }
+            var rtb = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(visual);
+            rtb.Freeze();
+            return rtb;
+        }
+
+        private static Color? ParseHexColor(string? hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return null;
+            hex = hex.TrimStart('#');
+            if (hex.Length == 6 &&
+                int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out int rgb))
+            {
+                return Color.FromRgb(
+                    (byte)(rgb >> 16),
+                    (byte)((rgb >> 8) & 0xFF),
+                    (byte)(rgb & 0xFF));
+            }
+            return null;
         }
 
         /// <summary>Vanilla English CSF BIG used as rebuild base when saving !EnglishZH.big.</summary>
@@ -2613,6 +2798,8 @@ namespace LauncherWinUI.Pages
             _slotLabelUndo.Clear();
             SetSlotLabelText(raw, recordUndo: false);
             if (btnSlotUndo != null) btnSlotUndo.IsEnabled = false;
+
+            RefreshHotkeyPreview();
         }
 
         private string ResolveCsfLabelKey(string labelCsfId)
@@ -3095,9 +3282,10 @@ namespace LauncherWinUI.Pages
 
             try
             {
+                var styleSnapshot = _hotkeyStyle;
                 var result = await Task.Run(() =>
                 {
-                    var patches = CommandCardHotkeyService.BuildTgaPatches(bindings);
+                    var patches = CommandCardHotkeyService.BuildTgaPatches(bindings, styleSnapshot);
                     if (patches.Count == 0)
                         return (Success: false, Error: "Could not resolve TGA atlas mappings.", PatchCount: 0);
 

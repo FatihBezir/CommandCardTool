@@ -20,7 +20,8 @@ internal static class TgaPatcher
     /// </summary>
     public static byte[] PaintHotkey(byte[] atlasBytes,
                                      int left, int top, int right, int bottom,
-                                     char letter)
+                                     char letter,
+                                     HotkeyStyle? style = null)
     {
         try
         {
@@ -55,7 +56,7 @@ internal static class TgaPatcher
             var cropBmp = RgbaToBitmapSource(rgba, atlasW, atlasH, l, t, cw, ch);
             if (cropBmp == null) return atlasBytes;
 
-            var painted = PaintLetter(cropBmp, letter);
+            var painted = PaintLetter(cropBmp, letter, style);
 
             // Blit painted crop back into RGBA array
             var pixels = new byte[cw * ch * 4];
@@ -88,28 +89,30 @@ internal static class TgaPatcher
 
     // ── WPF letter painter ──────────────────────────────────────────────────
 
-    private static BitmapSource PaintLetter(BitmapSource source, char letter)
+    private static BitmapSource PaintLetter(BitmapSource source, char letter, HotkeyStyle? style = null)
     {
+        var s = style ?? HotkeyStyle.Default;
         double w = source.PixelWidth, h = source.PixelHeight;
-        double boxW = Math.Max(Math.Floor(w * 0.28), 16);
-        double boxH = Math.Max(Math.Floor(h * 0.30), 16);
+        double sizeScale = s.LetterSizeRatio / 0.85;
+        double boxW = Math.Max(Math.Floor(w * 0.28 * sizeScale), 12);
+        double boxH = Math.Max(Math.Floor(h * 0.30 * sizeScale), 12);
         double boxY = h - boxH;
 
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
             dc.DrawImage(source, new Rect(0, 0, w, h));
-            dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(199, 0, 0, 0)),
+            dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(s.BoxAlpha, s.BoxColor.R, s.BoxColor.G, s.BoxColor.B)),
                              null, new Rect(0, boxY, boxW, boxH));
 
-            double fontSize = Math.Max(Math.Floor(boxH * 0.85), 8.0);
+            double fontSize = Math.Max(Math.Floor(boxH * s.LetterSizeRatio), 8.0);
             var ft = new FormattedText(
                 letter.ToString().ToUpperInvariant(),
                 CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
-                new Typeface(new FontFamily("Arial"), FontStyles.Normal,
+                new Typeface(new FontFamily(s.FontFamily), FontStyles.Normal,
                              FontWeights.Bold, FontStretches.Normal),
-                fontSize, Brushes.White, 1.0);
+                fontSize, new SolidColorBrush(s.LetterColor), 1.0);
 
             dc.DrawText(ft, new Point((boxW - ft.Width) / 2.0, boxY + (boxH - ft.Height) / 2.0));
         }

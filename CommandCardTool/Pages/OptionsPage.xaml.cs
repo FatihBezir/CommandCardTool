@@ -2151,6 +2151,24 @@ namespace LauncherWinUI.Pages
         private string _currentEditCsfKey  = "";
         private bool _suppressSlotEditor;
         private bool _commandCardBusy;
+
+        private enum HotkeyCategory { Buildings, Units, StarPowers, SpecialActions }
+        private readonly Dictionary<HotkeyCategory, HotkeyStyle> _categoryStyles = new()
+        {
+            [HotkeyCategory.Buildings]      = HotkeyStyle.Default,
+            [HotkeyCategory.Units]          = HotkeyStyle.Default,
+            [HotkeyCategory.StarPowers]     = HotkeyStyle.Default,
+            [HotkeyCategory.SpecialActions] = HotkeyStyle.Default,
+        };
+        private HotkeyCategory _activeStyleCategory = HotkeyCategory.Units;
+
+        /// <summary>
+        /// Returns true for global "action" buttons like Sell, Attack Move, Stop, Evacuate.
+        /// These share the CONTROLBAR: CSF namespace across all armies.
+        /// </summary>
+        private static bool IsSpecialActionCsfId(string csfId)
+            => csfId.StartsWith("CONTROLBAR:", StringComparison.OrdinalIgnoreCase)
+            || csfId.StartsWith("CONTROLBAR_", StringComparison.OrdinalIgnoreCase);
         private string _slotTextAtFocus = "";
         private readonly Stack<string> _slotLabelUndo = new();
 
@@ -2212,6 +2230,310 @@ namespace LauncherWinUI.Pages
                 cmbCommandCardArmy.Items.Add(army);
             if (cmbCommandCardArmy.Items.Count > 0)
                 cmbCommandCardArmy.SelectedIndex = 0;
+
+            InitHotkeyStylePanel();
+        }
+
+        // ── Hotkey Image Style ───────────────────────────────────────────────
+
+        private Color _letterColor      = Colors.White;
+        private Color _boxColor         = Colors.Black;
+        private double _letterSizeRatio = 0.85;
+        private Action<Color>? _colorPickerCallback;
+        private bool _pickerHexChanging;
+
+        // 4 rows × 8 columns = 32 preset colors
+        private static readonly string[] PickerColors =
+        [
+            "#FFFFFF","#CCCCCC","#999999","#666666","#444444","#222222","#111111","#000000",
+            "#FFFF66","#FFDD33","#FFAA00","#FF7700","#FF4400","#FF2200","#FF0000","#CC0000",
+            "#00FF88","#00EE44","#00CC00","#00AAAA","#00D4FF","#00AAFF","#55CCFF","#AAEEFF",
+            "#5566FF","#3344FF","#6600FF","#AA00FF","#FF00FF","#FF00AA","#FF0066","#FF3344",
+        ];
+
+        private void InitHotkeyStylePanel()
+        {
+            var fonts = new[]
+            {
+                "Arial", "Segoe UI", "Tahoma", "Verdana",
+                "Impact", "Consolas", "Courier New", "Times New Roman",
+            };
+            cmbHotkeyFont.ItemsSource = fonts;
+            cmbHotkeyFont.SelectedIndex = 0;
+
+            // Build swatch grid inside the popup once
+            foreach (var hex in PickerColors)
+            {
+                var c = ParseHexColor(hex) ?? Colors.White;
+                var swatch = new Border
+                {
+                    Width = 22, Height = 22,
+                    Margin = new Thickness(1),
+                    Background = new SolidColorBrush(c),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x50)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(2),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    ToolTip = hex,
+                };
+                swatch.MouseLeftButtonDown += (_, _) => ApplyPickerColor(c);
+                pickerSwatchPanel.Children.Add(swatch);
+            }
+
+            ApplyLetterColor(Colors.White);
+            ApplyBoxColor(Colors.Black);
+            UpdateHotkeyStyle();
+
+            // Sync initial tab selection with _activeStyleCategory
+            if (rbStyleUnits != null) rbStyleUnits.IsChecked = true;
+        }
+
+        // ── Color picker open/apply ──────────────────────────────────────────
+
+        private void BordPickLetterColor_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            _colorPickerCallback = c => ApplyLetterColor(c);
+            OpenColorPicker(bordPickLetterColor, _letterColor, "Letter Color");
+        }
+
+        private void BordPickBoxColor_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            _colorPickerCallback = c => ApplyBoxColor(c);
+            OpenColorPicker(bordPickBoxColor, _boxColor, "Box Color");
+        }
+
+        private void OpenColorPicker(UIElement target, Color current, string title)
+        {
+            lblPickerTitle.Text = title;
+            colorPickerPopup.PlacementTarget = target;
+            _pickerHexChanging = true;
+            txtPickerHex.Text = $"{current.R:X2}{current.G:X2}{current.B:X2}";
+            _pickerHexChanging = false;
+            bordPickerPreview.Background = new SolidColorBrush(current);
+            colorPickerPopup.IsOpen = true;
+            txtPickerHex.Focus();
+            txtPickerHex.SelectAll();
+
+            // Register outside-click handler after the popup is fully open
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, new Action(() =>
+            {
+                var w = Window.GetWindow(this);
+                if (w != null) w.PreviewMouseDown += ColorPickerWindowMouseDown;
+            }));
+        }
+
+        private void ColorPickerWindowMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            // Don't close when clicking the color-picker trigger buttons (they will re-open)
+            if (e.OriginalSource is DependencyObject src &&
+                (IsVisualChildOf(src, bordPickLetterColor) || IsVisualChildOf(src, bordPickBoxColor)))
+                return;
+
+            CloseColorPicker();
+        }
+
+        private void CloseColorPicker()
+        {
+            colorPickerPopup.IsOpen = false;
+            var w = Window.GetWindow(this);
+            if (w != null) w.PreviewMouseDown -= ColorPickerWindowMouseDown;
+        }
+
+        private static bool IsVisualChildOf(DependencyObject child, DependencyObject parent)
+        {
+            var cur = child;
+            while (cur != null)
+            {
+                if (cur == parent) return true;
+                cur = VisualTreeHelper.GetParent(cur);
+            }
+            return false;
+        }
+
+        private void ApplyPickerColor(Color c)
+        {
+            _colorPickerCallback?.Invoke(c);
+            CloseColorPicker();
+        }
+
+        private void BtnPickerOk_Click(object sender, RoutedEventArgs e)
+        {
+            var c = ParseHexColor(txtPickerHex.Text);
+            if (c.HasValue) ApplyPickerColor(c.Value);
+            else CloseColorPicker();
+        }
+
+        private void TxtPickerHex_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_pickerHexChanging) return;
+            var c = ParseHexColor(txtPickerHex.Text);
+            if (bordPickerPreview != null)
+                bordPickerPreview.Background = c.HasValue
+                    ? new SolidColorBrush(c.Value)
+                    : Brushes.Transparent;
+        }
+
+        // ── Helpers ──────────────────────────────────────────────────────────
+
+        private void ApplyLetterColor(Color c)
+        {
+            _letterColor = c;
+            if (bordPickLetterColor != null)
+                bordPickLetterColor.Background = new SolidColorBrush(c);
+            if (lblLetterColorHex != null)
+                lblLetterColorHex.Text = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            UpdateHotkeyStyle();
+        }
+
+        private void ApplyBoxColor(Color c)
+        {
+            _boxColor = c;
+            if (bordPickBoxColor != null)
+                bordPickBoxColor.Background = new SolidColorBrush(c);
+            if (lblBoxColorHex != null)
+                lblBoxColorHex.Text = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            UpdateHotkeyStyle();
+        }
+
+        private void CmbHotkeyFont_SelectionChanged(object sender, SelectionChangedEventArgs e)
+            => UpdateHotkeyStyle();
+
+        private void SliderLetterSize_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (lblLetterSizePct != null)
+                lblLetterSizePct.Text = $"{(int)Math.Round(e.NewValue)}%";
+            _letterSizeRatio = e.NewValue / 100.0;
+            UpdateHotkeyStyle();
+        }
+
+        private void SliderBoxOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (lblBoxOpacityPct != null)
+                lblBoxOpacityPct.Text = $"{(int)Math.Round(e.NewValue / 255.0 * 100)}%";
+            UpdateHotkeyStyle();
+        }
+
+        private void StyleCategoryChanged(object sender, RoutedEventArgs e)
+        {
+            HotkeyCategory newCat = rbStyleBuildings?.IsChecked      == true ? HotkeyCategory.Buildings
+                                  : rbStyleStarPowers?.IsChecked     == true ? HotkeyCategory.StarPowers
+                                  : rbStyleSpecialActions?.IsChecked == true ? HotkeyCategory.SpecialActions
+                                  : HotkeyCategory.Units;
+            if (newCat == _activeStyleCategory) return;
+            _activeStyleCategory = newCat;
+            LoadStylePanelFromCategory(newCat);
+        }
+
+        private void LoadStylePanelFromCategory(HotkeyCategory cat)
+        {
+            var s = _categoryStyles[cat];
+            // Temporarily suppress UpdateHotkeyStyle side effects while loading
+            _letterColor      = s.LetterColor;
+            _boxColor         = s.BoxColor;
+            _letterSizeRatio  = s.LetterSizeRatio;
+
+            if (bordPickLetterColor != null)
+                bordPickLetterColor.Background = new SolidColorBrush(s.LetterColor);
+            if (lblLetterColorHex != null)
+                lblLetterColorHex.Text = $"#{s.LetterColor.R:X2}{s.LetterColor.G:X2}{s.LetterColor.B:X2}";
+
+            if (bordPickBoxColor != null)
+                bordPickBoxColor.Background = new SolidColorBrush(s.BoxColor);
+            if (lblBoxColorHex != null)
+                lblBoxColorHex.Text = $"#{s.BoxColor.R:X2}{s.BoxColor.G:X2}{s.BoxColor.B:X2}";
+
+            if (sliderLetterSize != null)
+                sliderLetterSize.Value = Math.Round(s.LetterSizeRatio * 100.0);
+            if (lblLetterSizePct != null)
+                lblLetterSizePct.Text = $"{(int)Math.Round(s.LetterSizeRatio * 100.0)}%";
+
+            if (sliderBoxOpacity != null)
+                sliderBoxOpacity.Value = s.BoxAlpha;
+            if (lblBoxOpacityPct != null)
+                lblBoxOpacityPct.Text = $"{(int)Math.Round(s.BoxAlpha / 255.0 * 100)}%";
+
+            if (cmbHotkeyFont != null)
+                cmbHotkeyFont.SelectedItem = s.FontFamily;
+
+            RefreshHotkeyPreview();
+        }
+
+        private void UpdateHotkeyStyle()
+        {
+            string fontFamily = cmbHotkeyFont?.SelectedItem as string ?? "Arial";
+            byte alpha = sliderBoxOpacity != null
+                ? (byte)Math.Clamp((int)sliderBoxOpacity.Value, 0, 255)
+                : (byte)199;
+
+            var style = new HotkeyStyle(_letterColor, fontFamily, _boxColor, alpha, _letterSizeRatio);
+            _categoryStyles[_activeStyleCategory] = style;
+            RefreshHotkeyPreview();
+        }
+
+        private HotkeyStyle ActiveStyle => _categoryStyles[_activeStyleCategory];
+        private HotkeyStyle StyleFor(HotkeyCategory cat) => _categoryStyles[cat];
+
+        private void RefreshHotkeyPreview()
+        {
+            if (imgHotkeyPreview == null) return;
+
+            const int previewSize = 64;
+            BitmapSource? bg = null;
+            if (!string.IsNullOrEmpty(_currentEditCsfId) && !string.IsNullOrEmpty(_currentEditArmy))
+                bg = ButtonImageReader.GetSlotImage(_currentEditCsfId, _currentEditArmy);
+
+            bg ??= BuildSampleButtonBitmap(previewSize);
+
+            // Scale to a fixed square so the hotkey is always painted at the right position
+            if (bg.PixelWidth != previewSize || bg.PixelHeight != previewSize)
+                bg = ScaleBitmapTo(bg, previewSize);
+
+            imgHotkeyPreview.Source = HotkeyPainter.Paint(bg, 'A', ActiveStyle);
+        }
+
+        private static BitmapSource ScaleBitmapTo(BitmapSource src, int size)
+        {
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+                dc.DrawImage(src, new Rect(0, 0, size, size));
+            var rtb = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(visual);
+            rtb.Freeze();
+            return rtb;
+        }
+
+        private static BitmapSource BuildSampleButtonBitmap(int size)
+        {
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x0C, 0x18, 0x30)),
+                    null, new Rect(0, 0, size, size));
+                dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(30, 0x80, 0xC0, 0xFF)),
+                    null, new Rect(1, 1, size - 2, size / 2.0 - 1));
+                dc.DrawRectangle(null,
+                    new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x88, 0xA8)), 1.5),
+                    new Rect(0.75, 0.75, size - 1.5, size - 1.5));
+            }
+            var rtb = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(visual);
+            rtb.Freeze();
+            return rtb;
+        }
+
+        private static Color? ParseHexColor(string? hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return null;
+            hex = hex.TrimStart('#');
+            if (hex.Length == 6 &&
+                int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out int rgb))
+            {
+                return Color.FromRgb(
+                    (byte)(rgb >> 16),
+                    (byte)((rgb >> 8) & 0xFF),
+                    (byte)(rgb & 0xFF));
+            }
+            return null;
         }
 
         /// <summary>Vanilla English CSF BIG used as rebuild base when saving !EnglishZH.big.</summary>
@@ -2657,6 +2979,8 @@ namespace LauncherWinUI.Pages
             _slotLabelUndo.Clear();
             SetSlotLabelText(raw, recordUndo: false);
             if (btnSlotUndo != null) btnSlotUndo.IsEnabled = false;
+
+            RefreshHotkeyPreview();
         }
 
         private string ResolveCsfLabelKey(string labelCsfId)
@@ -3142,10 +3466,19 @@ namespace LauncherWinUI.Pages
         }
 
         private async Task<bool> ApplyHotkeyImagePatchesAsync(
-            List<CommandCardHotkeyService.SlotBinding> bindings, string scopeDescription)
+            List<CommandCardHotkeyService.SlotBinding> bindings, string scopeDescription,
+            HotkeyStyle? styleOverride = null)
+        {
+            var styled = bindings.Select(b => (b, styleOverride ?? ActiveStyle)).ToList();
+            return await ApplyHotkeyImagePatchesAsync(styled, scopeDescription);
+        }
+
+        private async Task<bool> ApplyHotkeyImagePatchesAsync(
+            List<(CommandCardHotkeyService.SlotBinding Binding, HotkeyStyle Style)> styledBindings,
+            string scopeDescription)
         {
             if (_commandCardBusy) return false;
-            if (bindings.Count == 0)
+            if (styledBindings.Count == 0)
             {
                 ShowCommandCardStatus("No slots with & shortcuts found in CSF labels.", isError: true);
                 return false;
@@ -3167,11 +3500,14 @@ namespace LauncherWinUI.Pages
             var labelsSnapshot = new Dictionary<string, string>(_csfLabels, StringComparer.OrdinalIgnoreCase);
             SetCommandCardBusy(true, $"Working on {scopeDescription}... Building image patches and saving BIG.");
 
+            // expose binding count for status message
+            int bindingCount = styledBindings.Count;
+
             try
             {
                 var result = await Task.Run(() =>
                 {
-                    var patches = CommandCardHotkeyService.BuildTgaPatches(bindings);
+                    var patches = CommandCardHotkeyService.BuildTgaPatches(styledBindings);
                     if (patches.Count == 0)
                         return (Success: false, Error: "Could not resolve TGA atlas mappings.", PatchCount: 0);
 
@@ -3196,7 +3532,7 @@ namespace LauncherWinUI.Pages
                     RefreshCommandCardViewAfterBulk();
 
                 ShowCommandCardStatus(
-                    $"{scopeDescription}: {bindings.Count} slot(s), {result.PatchCount} atlas file(s) written to BIG.");
+                    $"{scopeDescription}: {bindingCount} slot(s), {result.PatchCount} atlas file(s) written to BIG.");
                 return true;
             }
             catch (Exception ex)
@@ -3217,8 +3553,23 @@ namespace LauncherWinUI.Pages
                 "Includes all armies — normal cards (buildings + units) and general's powers.\n\nAre you sure?"))
                 return;
 
-            var bindings = CollectBindingsAllArmies(includeNormal: true, includeStar: true);
-            await ApplyHotkeyImagePatchesAsync(bindings, "All slots (from current labels)");
+            // Collect per-category and merge into a single styled list so all atlases are written once.
+            // CONTROLBAR: slots (Sell, Attack Move, Stop …) always use the SpecialActions style.
+            var styled = new List<(CommandCardHotkeyService.SlotBinding, HotkeyStyle)>();
+            foreach (var b in CollectBindingsAllArmies(includeNormal: true, includeStar: false, normalScope: CcNormalScope.Buildings))
+            {
+                var cat = IsSpecialActionCsfId(b.LabelCsfId) ? HotkeyCategory.SpecialActions : HotkeyCategory.Buildings;
+                styled.Add((b, StyleFor(cat)));
+            }
+            foreach (var b in CollectBindingsAllArmies(includeNormal: true, includeStar: false, normalScope: CcNormalScope.Units))
+            {
+                var cat = IsSpecialActionCsfId(b.LabelCsfId) ? HotkeyCategory.SpecialActions : HotkeyCategory.Units;
+                styled.Add((b, StyleFor(cat)));
+            }
+            styled.AddRange(CollectBindingsAllArmies(includeNormal: false, includeStar: true)
+                             .Select(b => (b, StyleFor(HotkeyCategory.StarPowers))));
+
+            await ApplyHotkeyImagePatchesAsync(styled, "All slots (from current labels)");
         }
 
         private async Task ApplyHotkeysToImagesAsync(
@@ -3243,7 +3594,12 @@ namespace LauncherWinUI.Pages
                 includeNormal: !starOnly,
                 includeStar: !normalOnly,
                 normalScope: normalScope);
-            await ApplyHotkeyImagePatchesAsync(bindings, scope);
+
+            HotkeyCategory cat = starOnly      ? HotkeyCategory.StarPowers
+                               : normalScope == CcNormalScope.Buildings ? HotkeyCategory.Buildings
+                               : normalScope == CcNormalScope.Units     ? HotkeyCategory.Units
+                               : HotkeyCategory.Units; // All → use active
+            await ApplyHotkeyImagePatchesAsync(bindings, scope, styleOverride: StyleFor(cat));
         }
 
         private async void BtnApplyNormalImagesBuildings_Click(object sender, RoutedEventArgs e)
@@ -3935,6 +4291,7 @@ namespace LauncherWinUI.Pages
             }
 
             LoadGameCommandMapHotkeys(gameHotkeys);
+            RefreshAltF4CloseStatus();
             UpdateExtraHotkeyLabelsAndValidation();
         }
 
@@ -3957,24 +4314,16 @@ namespace LauncherWinUI.Pages
                 return;
             }
 
-            var idx = new Dictionary<string, (int, int)>(StringComparer.OrdinalIgnoreCase);
-            CommandMapLocator.IndexBig(bigPath, idx);
-            _gameCommandMapIniPath =
-                idx.Keys.FirstOrDefault(k => string.Equals(
-                    k.Replace('/', '\\'),
-                    @"Data\English\CommandMap.ini",
-                    StringComparison.OrdinalIgnoreCase))
-                ?? GetFallbackCommandMapIni(bigPath);
-
-            if (_gameCommandMapIniPath == null)
+            var effective = CommandMapEditor.ReadEffectiveEntry(bigPath, @"Data\English\CommandMap.ini");
+            if (effective == null)
             {
                 lblGameHotkeyPath.Text = "(CommandMap.ini bulunamadı)";
                 btnSaveGameHotkeys.IsEnabled = false;
                 return;
             }
 
-            byte[]? raw = CommandMapLocator.ReadEntry(bigPath, idx, _gameCommandMapIniPath);
-            string text = raw != null ? Encoding.UTF8.GetString(raw) : "";
+            _gameCommandMapIniPath = effective.EntryName;
+            string text = effective.Text;
 
             foreach (var def in defs)
             {
@@ -3985,8 +4334,61 @@ namespace LauncherWinUI.Pages
                 SelectExtraCombo(def.ModCombo, entry.Modifiers);
             }
 
-            lblGameHotkeyPath.Text = _gameCommandMapIniPath;
+            lblGameHotkeyPath.Text = effective.FromOverride
+                ? $"!EnglishZH.big → {_gameCommandMapIniPath}"
+                : $"EnglishZH.big → {_gameCommandMapIniPath}";
             btnSaveGameHotkeys.IsEnabled = true;
+        }
+
+        private void RefreshAltF4CloseStatus()
+        {
+            bool ready = _gameCommandMapBigPath != null
+                      && _gameCommandMapIniPath != null
+                      && File.Exists(_gameCommandMapBigPath);
+
+            btnEnableAltF4Close.IsEnabled = ready;
+            btnRevertAltF4Close.IsEnabled = ready;
+
+            if (!ready)
+            {
+                lblAltF4ClosePath.Text = "(EnglishZH.big / CommandMap.ini bulunamadı)";
+                return;
+            }
+
+            lblAltF4ClosePath.Text = _gameCommandMapIniPath ?? "";
+
+            try
+            {
+                var effective = CommandMapEditor.ReadEffectiveEntry(
+                    _gameCommandMapBigPath!,
+                    _gameCommandMapIniPath!);
+                var entry = effective != null
+                    ? CommandMapParser.ParseBlock(effective.Text, "DEMO_INSTANT_QUIT")
+                    : null;
+
+                if (entry == null)
+                {
+                    ShowExtraStatus(lblAltF4CloseStatus, "DEMO_INSTANT_QUIT block not found.", isError: true);
+                    return;
+                }
+
+                lblAltF4ClosePath.Text = effective!.FromOverride
+                    ? $"!EnglishZH.big → {effective.EntryName}"
+                    : $"EnglishZH.big → {effective.EntryName}";
+
+                bool active = string.Equals(entry.Key, "KEY_F4", StringComparison.OrdinalIgnoreCase)
+                           && string.Equals(entry.Modifiers, "ALT", StringComparison.OrdinalIgnoreCase);
+
+                ShowExtraStatus(lblAltF4CloseStatus,
+                    active
+                        ? "Active: Alt+F4 is mapped to DEMO_INSTANT_QUIT."
+                        : $"Current: {entry.Modifiers.Replace("_", " + ")} + {entry.Key.Replace("KEY_", "")}",
+                    isError: false);
+            }
+            catch (Exception ex)
+            {
+                ShowExtraStatus(lblAltF4CloseStatus, $"Could not read Alt+F4 status: {ex.Message}", isError: true);
+            }
         }
 
         private IEnumerable<ExtraShortcutRow> GetExtraShortcutRows()
@@ -4172,16 +4574,16 @@ namespace LauncherWinUI.Pages
                     def.ModCombo.SelectedItem as string ?? def.DefaultModifiers))
                 .ToList();
 
-            byte[]? newBig = CommandMapEditor.SaveEntries(
+            string? outPath = CommandMapEditor.SaveEntriesToOverride(
                 _gameCommandMapBigPath,
                 _gameCommandMapIniPath,
                 updates);
 
-            if (newBig != null)
+            if (outPath != null)
             {
-                File.WriteAllBytes(_gameCommandMapBigPath, newBig);
-                ShowExtraStatus(lblGameHotkeysStatus, "Gameplay hotkeys saved to EnglishZH.big.", isError: false);
+                ShowExtraStatus(lblGameHotkeysStatus, $"Gameplay hotkeys saved to {Path.GetFileName(outPath)}.", isError: false);
                 LoadGameCommandMapHotkeys(GetGameHotkeyDefs());
+                RefreshAltF4CloseStatus();
                 UpdateExtraHotkeyLabelsAndValidation();
             }
             else
@@ -4189,6 +4591,47 @@ namespace LauncherWinUI.Pages
                 ShowExtraStatus(lblGameHotkeysStatus, "HATA: CommandMap blokları kaydedilemedi.", isError: true);
             }
         }
+
+        private void ApplyAltF4ClosePatch(string key, string modifiers, string successMessage)
+        {
+            if (_gameCommandMapBigPath == null
+             || _gameCommandMapIniPath == null
+             || !File.Exists(_gameCommandMapBigPath))
+            {
+                ShowExtraStatus(lblAltF4CloseStatus, "HATA: EnglishZH.big / CommandMap.ini bulunamadı.", isError: true);
+                return;
+            }
+
+            string? outPath = CommandMapEditor.SaveEntriesToOverride(
+                _gameCommandMapBigPath,
+                _gameCommandMapIniPath,
+                new[]
+                {
+                    new CommandMapEditor.CommandMapUpdate(
+                        "DEMO_INSTANT_QUIT",
+                        key,
+                        modifiers,
+                        "GAME SHELL"),
+                });
+
+            if (outPath != null)
+            {
+                ShowExtraStatus(lblAltF4CloseStatus, $"{successMessage} Saved to {Path.GetFileName(outPath)}.", isError: false);
+                LoadGameCommandMapHotkeys(GetGameHotkeyDefs());
+                RefreshAltF4CloseStatus();
+                UpdateExtraHotkeyLabelsAndValidation();
+            }
+            else
+            {
+                ShowExtraStatus(lblAltF4CloseStatus, "HATA: DEMO_INSTANT_QUIT block could not be saved.", isError: true);
+            }
+        }
+
+        private void BtnEnableAltF4Close_Click(object sender, RoutedEventArgs e)
+            => ApplyAltF4ClosePatch("KEY_F4", "ALT", "Alt+F4 close activated.");
+
+        private void BtnRevertAltF4Close_Click(object sender, RoutedEventArgs e)
+            => ApplyAltF4ClosePatch("KEY_BACKSPACE", "SHIFT_CTRL", "Alt+F4 close reverted to default.");
 
         private void BtnNukeBattlemasterFix_Click(object sender, RoutedEventArgs e)
         {

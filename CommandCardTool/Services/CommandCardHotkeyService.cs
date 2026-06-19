@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Windows.Media;
 
 namespace LauncherWinUI.Services;
 
@@ -96,12 +97,19 @@ internal static class CommandCardHotkeyService
         return true;
     }
 
-    /// <summary>Aynı atlas dosyasındaki birden fazla bölgeye sırayla kısayol harfi boyar.</summary>
-    public static Dictionary<string, byte[]> BuildTgaPatches(IEnumerable<SlotBinding> bindings)
+    /// <summary>Aynı atlas dosyasındaki birden fazla bölgeye sırayla kısayol harfi boyar (tek stil).</summary>
+    public static Dictionary<string, byte[]> BuildTgaPatches(
+        IEnumerable<SlotBinding> bindings,
+        HotkeyStyle? style = null)
+        => BuildTgaPatches(bindings.Select(b => (b, style ?? HotkeyStyle.Default)));
+
+    /// <summary>Her binding için ayrı stil kullanarak atlas yamaları oluşturur.</summary>
+    public static Dictionary<string, byte[]> BuildTgaPatches(
+        IEnumerable<(SlotBinding Binding, HotkeyStyle Style)> styledBindings)
     {
         var atlasBytes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var b in bindings)
+        foreach (var (b, style) in styledBindings)
         {
             char hk = HotkeyPainter.ExtractHotkeyChar(b.LabelText);
             if (hk == '\0') continue;
@@ -116,7 +124,7 @@ internal static class CommandCardHotkeyService
             }
 
             atlasBytes[info.EntryName] = TgaPatcher.PaintHotkey(
-                bytes, info.Left, info.Top, info.Right, info.Bottom, hk);
+                bytes, info.Left, info.Top, info.Right, info.Bottom, hk, style);
         }
 
         return atlasBytes;

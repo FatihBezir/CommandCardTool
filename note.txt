@@ -1,0 +1,3 @@
+dotnet build CommandCardTool\CommandCardTool.csproj -c Release
+
+dotnet publish CommandCardTool\CommandCardTool.csproj -c Release -r win-x86 --self-contained false
