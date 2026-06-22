@@ -128,6 +128,6 @@ internal static class HotkeyPainter
     {
         int idx = FindHotkeyMarkerIndex(rawLabel);
         if (idx < 0 || idx + 1 >= rawLabel.Length) return '\0';
-        return rawLabel[idx + 1];
+        return char.ToUpperInvariant(rawLabel[idx + 1]);
     }
 }

@@ -59,6 +59,66 @@ internal static class CommandCardHotkeyService
         return ApplyHotkeyCharToLabel(text, upper);
     }
 
+    /// <summary>
+    /// General-variant label from vanilla CSF hotkey position — e.g.
+    /// «Tunnel &amp;Network» + «Toxin Network» → «Toxin &amp;Network» (not «Toxin Network (&amp;N)»).
+    /// </summary>
+    public static string GraftVariantLabelFromVanilla(string variantDisplayPlain, string vanillaTextWithHotkey)
+    {
+        variantDisplayPlain = StripHotkeyMarkup(variantDisplayPlain).Trim();
+        if (string.IsNullOrEmpty(variantDisplayPlain)) return variantDisplayPlain;
+
+        int ampIdx = HotkeyPainter.FindHotkeyMarkerIndex(vanillaTextWithHotkey);
+        if (ampIdx < 0 || ampIdx + 1 >= vanillaTextWithHotkey.Length)
+        {
+            char hk = HotkeyPainter.ExtractHotkeyChar(vanillaTextWithHotkey);
+            return hk == '\0' ? variantDisplayPlain : ApplyHotkeyCharToLabel(variantDisplayPlain, hk);
+        }
+
+        string vanillaPlain = StripHotkeyMarkup(vanillaTextWithHotkey);
+        int plainIdx = 0;
+        for (int i = 0; i <= ampIdx; i++)
+        {
+            if (vanillaTextWithHotkey[i] != '&')
+                plainIdx++;
+        }
+
+        if (plainIdx >= vanillaPlain.Length)
+        {
+            char hk = char.ToUpperInvariant(vanillaTextWithHotkey[ampIdx + 1]);
+            return ApplyHotkeyCharToLabel(variantDisplayPlain, hk);
+        }
+
+        string vanillaSuffix = vanillaPlain[plainIdx..];
+        if (variantDisplayPlain.EndsWith(vanillaSuffix, StringComparison.OrdinalIgnoreCase)
+         && variantDisplayPlain.Length >= vanillaSuffix.Length)
+        {
+            string variantPrefix = variantDisplayPlain[..^vanillaSuffix.Length];
+            return variantPrefix + "&" + vanillaSuffix;
+        }
+
+        char fallback = char.ToUpperInvariant(vanillaTextWithHotkey[ampIdx + 1]);
+        return ApplyHotkeyCharToLabel(variantDisplayPlain, fallback);
+    }
+
+    /// <summary>
+    /// Assigns a keyboard hotkey to a general-variant display name using vanilla &amp; placement when available.
+    /// </summary>
+    public static string ApplyHotkeyToVariantLabel(string variantText, char key, string? vanillaTextWithHotkey)
+    {
+        if (key == '\0') return StripHotkeyMarkup(variantText);
+
+        string plain = StripHotkeyMarkup(variantText);
+        if (!string.IsNullOrEmpty(vanillaTextWithHotkey)
+         && HotkeyPainter.FindHotkeyMarkerIndex(vanillaTextWithHotkey) >= 0)
+        {
+            string grafted = GraftVariantLabelFromVanilla(plain, vanillaTextWithHotkey);
+            return SetHotkeyCharInLabel(grafted, key);
+        }
+
+        return SetHotkeyCharInLabel(plain, key);
+    }
+
     /// <summary>Exactly one &amp; hotkey; letter after &amp;; at least one character after that letter.</summary>
     public static bool TryValidateLabel(string text, out string? error)
     {
@@ -105,26 +165,47 @@ internal static class CommandCardHotkeyService
 
     /// <summary>Her binding için ayrı stil kullanarak atlas yamaları oluşturur.</summary>
     public static Dictionary<string, byte[]> BuildTgaPatches(
-        IEnumerable<(SlotBinding Binding, HotkeyStyle Style)> styledBindings)
+        IEnumerable<(SlotBinding Binding, HotkeyStyle Style)> styledBindings,
+        IProgress<int>? progress = null)
     {
+        var bindings = styledBindings as IReadOnlyList<(SlotBinding Binding, HotkeyStyle Style)>
+            ?? styledBindings.ToList();
+        int total = bindings.Count;
         var atlasBytes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var (b, style) in styledBindings)
+        for (int i = 0; i < total; i++)
         {
+            var (b, style) = bindings[i];
             char hk = HotkeyPainter.ExtractHotkeyChar(b.LabelText);
-            if (hk == '\0') continue;
-
-            var info = ButtonImageReader.ResolveTgaSlot(b.ImageCsfId, b.Army);
-            if (info == null) continue;
-
-            if (!atlasBytes.TryGetValue(info.EntryName, out byte[]? bytes))
+            if (hk != '\0')
             {
-                bytes = ButtonImageReader.ReadTgaEntry(info.EntryName);
-                if (bytes == null) continue;
+                var info = ButtonImageReader.ResolveTgaSlot(b.ImageCsfId, b.Army);
+                if (info != null)
+                {
+                    if (!atlasBytes.TryGetValue(info.EntryName, out byte[]? bytes))
+                    {
+                        bytes = ButtonImageReader.ReadTgaEntry(info.EntryName);
+                    }
+
+                    if (bytes != null)
+                    {
+                        byte[] painted = TgaPatcher.PaintHotkey(
+                            bytes, info.Left, info.Top, info.Right, info.Bottom, hk, style);
+                        atlasBytes[info.EntryName] = painted;
+
+                        foreach (var twinName in ButtonImageReader.FindTwinEntryNames(info.EntryName))
+                        {
+                            if (atlasBytes.ContainsKey(twinName)) continue;
+                            byte[]? twinRaw = ButtonImageReader.ReadTgaEntry(twinName);
+                            if (twinRaw == null) continue;
+                            atlasBytes[twinName] = TgaPatcher.PaintHotkey(
+                                twinRaw, info.Left, info.Top, info.Right, info.Bottom, hk, style);
+                        }
+                    }
+                }
             }
 
-            atlasBytes[info.EntryName] = TgaPatcher.PaintHotkey(
-                bytes, info.Left, info.Top, info.Right, info.Bottom, hk, style);
+            progress?.Report(i + 1);
         }
 
         return atlasBytes;

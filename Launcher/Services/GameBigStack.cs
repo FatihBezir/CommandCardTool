@@ -44,12 +44,21 @@ internal static class GameBigStack
         return index;
     }
 
+    /// <summary>Ready-made hotkey profile BIGs — excluded from default CSF merge; loaded only when a profile is selected.</summary>
+    public static bool IsHotkeyProfileBig(string bigPath)
+    {
+        string name = Path.GetFileName(bigPath);
+        return name.Contains("HotkeysLeikeze", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Merges every .csf found in load-order BIGs; first file wins per label key.</summary>
-    public static Dictionary<string, string> BuildMergedCsfLabels(string gameDir)
+    /// <param name="excludeProfileBigs">When true, skips !HotkeysLeikeze*.big so «Current CSF» uses the normal game stack only.</param>
+    public static Dictionary<string, string> BuildMergedCsfLabels(string gameDir, bool excludeProfileBigs = true)
     {
         var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var bigPath in GetSortedBigPaths(gameDir))
         {
+            if (excludeProfileBigs && IsHotkeyProfileBig(bigPath)) continue;
             foreach (var kv in BigCsfReader.ReadFromBig(bigPath))
                 labels.TryAdd(kv.Key, kv.Value);
         }

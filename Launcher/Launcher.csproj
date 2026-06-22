@@ -10,6 +10,7 @@
     <Platforms>AnyCPU;x86</Platforms>
     <AssemblyTitle>GeneralsOnlineLauncher</AssemblyTitle>
   </PropertyGroup>
+
   <ItemGroup>
     <Resource Include="Assets\**" />
   </ItemGroup>

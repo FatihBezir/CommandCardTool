@@ -47,58 +47,53 @@ internal static class BigCsfWriter
         if (!File.Exists(sourceBigPath)) return null;
         try
         {
-            byte[] originalBigData = File.ReadAllBytes(sourceBigPath);
+            string outputPath = GetOutputPath(sourceBigPath);
+            byte[] sourceBigData = File.ReadAllBytes(sourceBigPath);
 
-            // 1. Extract the CSF from the ORIGINAL big.
-            var entries = ExtractAllEntries(originalBigData);
+            var entries = ExtractAllEntries(sourceBigData);
             if (entries == null) return null;
 
             int csfIdx = entries.FindIndex(e =>
                 e.Name.EndsWith(".csf", StringComparison.OrdinalIgnoreCase));
             if (csfIdx < 0) return null;
 
-            // 2. Apply ALL label overrides to the full CSF.
             byte[]? patchedCsf = ApplyAllOverrides(entries[csfIdx].Data, allOverrides);
             if (patchedCsf == null) return null;
 
-            // 3. Build entry list: CSF first, then preserve any existing override
-            // assets in !EnglishZH.big. Label-only saves must not drop painted
-            // TGA/DDS entries that are already higher in the game's BIG order.
-            string outputPath = GetOutputPath(sourceBigPath);
             var names = new List<string>();
             var bodies = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
 
-            void UpsertEntry(string name, byte[] data)
+            foreach (var entry in entries)
             {
-                if (!bodies.ContainsKey(name))
-                    names.Add(name);
-                bodies[name] = data;
-            }
-
-            UpsertEntry(entries[csfIdx].Name, patchedCsf);
-
-            if (File.Exists(outputPath))
-            {
-                var existingEntries = ExtractAllEntries(File.ReadAllBytes(outputPath));
-                if (existingEntries != null)
-                {
-                    foreach (var existing in existingEntries)
-                    {
-                        if (existing.Name.EndsWith(".csf", StringComparison.OrdinalIgnoreCase))
-                            continue;
-                        UpsertEntry(existing.Name, existing.Data);
-                    }
-                }
+                if (entry.Name.EndsWith(".csf", StringComparison.OrdinalIgnoreCase))
+                    bodies[entry.Name] = patchedCsf;
+                else if (tgaPatches != null && tgaPatches.TryGetValue(entry.Name, out var patched))
+                    bodies[entry.Name] = patched;
+                else
+                    bodies[entry.Name] = entry.Data;
+                names.Add(entry.Name);
             }
 
             if (tgaPatches != null)
             {
                 foreach (var kv in tgaPatches)
-                    UpsertEntry(kv.Key, kv.Value);
+                {
+                    if (bodies.ContainsKey(kv.Key)) continue;
+                    names.Add(kv.Key);
+                    bodies[kv.Key] = kv.Value;
+                }
             }
 
             var blobs = names.ConvertAll(name => bodies[name]);
             byte[] outBig = BuildMultiEntryBig(names, blobs);
+
+            string backupPath = outputPath + ".bak";
+            try
+            {
+                if (File.Exists(outputPath))
+                    File.Copy(outputPath, backupPath, overwrite: true);
+            }
+            catch { /* best-effort backup */ }
 
             File.WriteAllBytes(outputPath, outBig);
             return outputPath;
@@ -240,10 +235,16 @@ internal static class BigCsfWriter
                 labels.Add(new CsfLabel(key, strings));
             }
 
-            // Apply every override whose key matches a label in the CSF.
+            // Apply every override whose key matches a label already in the CSF.
+            var appliedOverrideKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var lbl in labels)
             {
                 if (!TryFindOverride(overrides, lbl.Key, out var newText)) continue;
+                foreach (var kv in overrides)
+                {
+                    if (OverrideMatchesLabel(kv.Key, lbl.Key))
+                        appliedOverrideKeys.Add(kv.Key);
+                }
                 if (lbl.Strings.Count > 0)
                 {
                     var old = lbl.Strings[0];
@@ -251,7 +252,22 @@ internal static class BigCsfWriter
                 }
             }
 
-            return WriteCsf(version, numStrings, reserved, language, labels);
+            // Labels edited but absent from source CSF (web buildCsf always includes every item).
+            foreach (var kv in overrides)
+            {
+                if (appliedOverrideKeys.Contains(kv.Key)) continue;
+                if (string.IsNullOrWhiteSpace(kv.Value)) continue;
+                if (labels.Exists(lbl => OverrideMatchesLabel(kv.Key, lbl.Key))) continue;
+                labels.Add(new CsfLabel(
+                    NormalizeNewCsfKey(kv.Key),
+                    new List<CsfString> { new CsfString(" RTS", kv.Value, null) }));
+            }
+
+            uint totalStrings = 0;
+            foreach (var lbl in labels)
+                totalStrings += (uint)lbl.Strings.Count;
+
+            return WriteCsf(version, totalStrings, reserved, language, labels);
         }
         catch { return null; }
     }
@@ -283,6 +299,14 @@ internal static class BigCsfWriter
         int ci = k.IndexOf(':');
         return ci >= 0 ? k[(ci + 1)..] : k;
     }
+
+    private static bool OverrideMatchesLabel(string overrideKey, string csfLabelKey)
+        => string.Equals(overrideKey, csfLabelKey, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(BareKey(overrideKey), BareKey(csfLabelKey), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>New variant labels use CommandButton.ini PascalCase keys when known.</summary>
+    private static string NormalizeNewCsfKey(string key)
+        => CsfVariantKeys.ToNewCsfKey(key);
 
     private static byte[] WriteCsf(uint version, uint numStrings, uint reserved,
                                     uint language, List<CsfLabel> labels)

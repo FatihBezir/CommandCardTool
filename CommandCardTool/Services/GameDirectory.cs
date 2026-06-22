@@ -1,21 +1,20 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
+using Microsoft.Win32;
 
 namespace LauncherWinUI.Services;
 
 /// <summary>
-/// Oyun veri klasörü: varsayılan olarak EXE'nin bulunduğu dizin.
-/// Test için kopyalamadan Steam klasörüne bakmak istersen:
-///   - ortam değişkeni: ZH_GAME_DIR
-///   - veya EXE yanında tek satırlık game_path.txt
+/// Zero Hour install folder. Auto-detects Steam paths; optional override via ZH_GAME_DIR env var.
 /// </summary>
 internal static class GameDirectory
 {
     public const string EnvVarName = "ZH_GAME_DIR";
-    public const string PathFileName = "game_path.txt";
+    private const string GameFolderName = "Command & Conquer Generals - Zero Hour";
 
-    /// <summary>Resolved game folder (always returns a path; may lack .big files).</summary>
     public static string Get()
     {
         string? env = Environment.GetEnvironmentVariable(EnvVarName);
@@ -26,15 +25,11 @@ internal static class GameDirectory
         }
 
         string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-        string pathFile = Path.Combine(exeDir, PathFileName);
-        if (File.Exists(pathFile))
+        if (LooksLikeGameDir(exeDir)) return exeDir;
+
+        foreach (string candidate in DiscoverInstallCandidates())
         {
-            string? line = File.ReadLines(pathFile).FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
-            if (!string.IsNullOrWhiteSpace(line))
-            {
-                string full = Path.GetFullPath(line.Trim());
-                if (Directory.Exists(full)) return full;
-            }
+            if (LooksLikeGameDir(candidate)) return candidate;
         }
 
         return exeDir;
@@ -48,4 +43,72 @@ internal static class GameDirectory
 
     public static string Combine(params string[] paths)
         => Path.Combine(Get(), Path.Combine(paths));
+
+    private static bool LooksLikeGameDir(string dir)
+        => Directory.Exists(dir)
+        && File.Exists(Path.Combine(dir, "INIZH.big"))
+        && File.Exists(Path.Combine(dir, "EnglishZH.big"));
+
+    private static IEnumerable<string> DiscoverInstallCandidates()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var list = new List<string>();
+
+        void Track(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            try
+            {
+                string full = Path.GetFullPath(path.Trim());
+                if (seen.Add(full)) list.Add(full);
+            }
+            catch { /* ignore bad paths */ }
+        }
+
+        Track(@"d:\SteamLibrary\steamapps\common\" + GameFolderName);
+        Track(@"c:\SteamLibrary\steamapps\common\" + GameFolderName);
+        Track(@"e:\SteamLibrary\steamapps\common\" + GameFolderName);
+
+        foreach (string steamRoot in GetSteamRoots())
+        {
+            Track(Path.Combine(steamRoot, "steamapps", "common", GameFolderName));
+            string vdf = Path.Combine(steamRoot, "steamapps", "libraryfolders.vdf");
+            if (!File.Exists(vdf)) continue;
+            try
+            {
+                string text = File.ReadAllText(vdf);
+                foreach (Match m in Regex.Matches(text, "\"path\"\\s+\"([^\"]+)\""))
+                {
+                    string lib = m.Groups[1].Value.Replace(@"\\", @"\");
+                    Track(Path.Combine(lib, "steamapps", "common", GameFolderName));
+                }
+            }
+            catch { /* skip unreadable vdf */ }
+        }
+
+        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        Track(Path.Combine(programFiles, "Steam", "steamapps", "common", GameFolderName));
+        Track(Path.Combine(programFiles, "EA Games", GameFolderName));
+
+        return list;
+    }
+
+    private static IEnumerable<string> GetSteamRoots()
+    {
+        var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine })
+            {
+                using var key = hive.OpenSubKey(@"Software\Valve\Steam");
+                string? steamPath = key?.GetValue("SteamPath") as string;
+                if (!string.IsNullOrWhiteSpace(steamPath))
+                    roots.Add(steamPath.Replace('/', '\\'));
+            }
+        }
+        catch { /* registry unavailable */ }
+
+        roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam"));
+        return roots;
+    }
 }

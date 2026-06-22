@@ -799,12 +799,61 @@ namespace LauncherWinUI.Pages
         private static string NormalizeCsfId(string id)
             => id.Contains(':') ? id : "controlbar:" + id;
 
+        private static string NormalizeCsfIdStorage(string csfId)
+        {
+            int ci = csfId.IndexOf(':');
+            if (ci >= 0)
+                return csfId[..ci].ToLowerInvariant() + ":" + csfId[(ci + 1)..].ToLowerInvariant();
+            return "controlbar:" + csfId.ToLowerInvariant();
+        }
+
         private static CcSlotDef CC(int n, string id)
             => new CcSlotDef((n - 1) / 7, (n - 1) % 7, NormalizeCsfId(id));
 
         /// <summary>Label CSF + separate icon CSF (web slotWithImage).</summary>
         private static CcSlotDef CCI(int n, string labelId, string imageId)
             => new CcSlotDef((n - 1) / 7, (n - 1) % 7, NormalizeCsfId(labelId), NormalizeCsfId(imageId));
+
+        private static CcSlotDef CCR(int row, int col, string id)
+            => new CcSlotDef(row, col, NormalizeCsfId(id));
+
+        /// <summary>GLA worker: two stacked 2×7 grids (real buildings + fake buildings).</summary>
+        private static List<CcSlotDef> GlaWorkerSlots(string tunnelId, string demoTrapId, bool hasSuicide = false)
+        {
+            var slots = new List<CcSlotDef>
+            {
+                CCR(0, 0, "constructglasupplystash"),
+                CCR(0, 1, "constructglabarracks"),
+                CCR(0, 2, "constructglastingersite"),
+                CCR(0, 3, tunnelId),
+                CCR(0, 4, "constructglaarmsdealer"),
+                CCR(0, 6, "upgradeglaworkerfakecommandset"),
+                CCR(1, 0, demoTrapId),
+                CCR(1, 1, "constructglapalace"),
+                CCR(1, 2, "constructglablackmarket"),
+                CCR(1, 3, "constructglascudstorm"),
+                CCR(1, 4, "constructglacommandcenter"),
+                CCR(1, 6, "disarmminesatposition"),
+                CCR(2, 0, "constructfakeglacommandcenter"),
+                CCR(2, 1, "constructfakeglasupplystash"),
+                CCR(2, 2, "constructfakeglablackmarket"),
+                CCR(2, 6, "upgradeglaworkerfakecommandset"),
+                CCR(3, 0, "constructfakeglabarracks"),
+                CCR(3, 1, "constructfakeglaarmsdealer"),
+            };
+            if (hasSuicide)
+            {
+                slots.Add(CCR(0, 5, "suicideattack"));
+                slots.Add(CCR(2, 5, "suicideattack"));
+            }
+            return slots;
+        }
+
+        private static string BareCsfId(string csfId)
+        {
+            int ci = csfId.IndexOf(':');
+            return ci >= 0 ? csfId[(ci + 1)..] : csfId;
+        }
 
         private static readonly string[] _usaSharedUnits = {
             "Ranger", "Colonel Burton", "Pathfinder", "Humvee", "Avenger",
@@ -1051,6 +1100,12 @@ namespace LauncherWinUI.Pages
                 CC(10,"constructglainfantryjarmenkell"), CC(11,"upgradeglaboobytrap"),
                 CC(14,"sell"),
             },
+            ["Barracks (Toxin)"] = new() {
+                CC(1,"constructglainfantryrebel"), CC(2,"constructglainfantryterrorist"),
+                CC(6,"upgradeglarebelcapturebuilding"), CC(7,"setrallypoint"),
+                CC(8,"constructglainfantryrpgtrooper"), CC(9,"constructglainfantryangrymob"),
+                CC(10,"constructglainfantryjarmenkell"), CC(14,"sell"),
+            },
             ["Stinger Site"] = new() {
                 CC(7,"stop"), CC(14,"sell"),
             },
@@ -1099,7 +1154,7 @@ namespace LauncherWinUI.Pages
                 CC(1,"detonatefakebuilding"), CC(8,"becomerealglablackmarket"), CC(14,"sell"),
             },
             ["Fake Command Center"] = new() {
-                CC(1,"detonatefakebuilding"), CC(14,"sell"),
+                CC(1,"detonatefakebuilding"), CC(8,"becomerealglacommandcenter"), CC(14,"sell"),
             },
             ["Fake Supply Stash"] = new() {
                 CC(1,"detonatefakebuilding"), CC(8,"becomerealglasupplystash"), CC(14,"sell"),
@@ -1162,30 +1217,9 @@ namespace LauncherWinUI.Pages
             ["Mini-Gunner"] = new() {
                 CC(1,"capturebuilding"), CC(6,"attackmove"), CC(7,"guard"), CC(14,"stop"),
             },
-            ["Worker"] = new() {
-                CC(1,"constructglasupplystash"), CC(2,"constructglabarracks"),
-                CC(3,"constructglastingersite"), CC(4,"constructglatunnelnetwork"),
-                CC(5,"constructglaarmsdealer"), CC(7,"upgradeglaworkerfakecommandset"),
-                CC(8,"constructglademotrap"), CC(9,"constructglapalace"),
-                CC(10,"constructglablackmarket"), CC(11,"constructglascudstorm"),
-                CC(12,"constructglacommandcenter"), CC(14,"disarmminesatposition"),
-            },
-            ["Worker (Toxin)"] = new() {
-                CC(1,"constructglasupplystash"), CC(2,"constructglabarracks"),
-                CC(3,"constructglastingersite"), CC(4,"chem_constructglatunnelnetwork"),
-                CC(5,"constructglaarmsdealer"), CC(7,"upgradeglaworkerfakecommandset"),
-                CC(8,"constructglademotrap"), CC(9,"constructglapalace"),
-                CC(10,"constructglablackmarket"), CC(11,"constructglascudstorm"),
-                CC(12,"constructglacommandcenter"), CC(14,"disarmminesatposition"),
-            },
-            ["Worker (Demo)"] = new() {
-                CC(1,"constructglasupplystash"), CC(2,"constructglabarracks"),
-                CC(3,"constructglastingersite"), CC(4,"constructglatunnelnetwork"),
-                CC(5,"constructglaarmsdealer"), CC(6,"suicideattack"), CC(7,"upgradeglaworkerfakecommandset"),
-                CC(8,"demo_constructglademotrap"), CC(9,"constructglapalace"),
-                CC(10,"constructglablackmarket"), CC(11,"constructglascudstorm"),
-                CC(12,"constructglacommandcenter"), CC(14,"disarmminesatposition"),
-            },
+            ["Worker"] = GlaWorkerSlots("constructglatunnelnetwork", "constructglademotrap"),
+            ["Worker (Toxin)"] = GlaWorkerSlots("chem_constructglatunnelnetwork", "constructglademotrap"),
+            ["Worker (Demo)"] = GlaWorkerSlots("constructglatunnelnetwork", "demo_constructglademotrap", hasSuicide: true),
             // ─── USA Unit Cards ────────────────────────────────────────────────────────
             ["Ranger"] = new() {
                 CC(1,"capturebuilding"), CC(6,"attackmove"), CC(7,"guard"),
@@ -1380,7 +1414,7 @@ namespace LauncherWinUI.Pages
         private static readonly StarSlotRef STAR_AMB1    = new("CONTROLBAR:Ambush",                      "SCIENCE:GLARebelAmbush1");
         private static readonly StarSlotRef STAR_ANTHRAX = new("CONTROLBAR:AnthraxBomb",                 "SCIENCE:GLAAnthraxBomb");
         private static readonly StarSlotRef STAR_CLUSTER = new("SCIENCE:ChinaClusterMines",              "CONTROLBAR:ClusterMines");
-        private static readonly StarSlotRef STAR_SPY     = new("SCIENCE:USASpyDrone");
+        private static readonly StarSlotRef STAR_SPY     = new("CONTROLBAR:SpyDrone");
         private static readonly StarSlotRef STAR_PATHFINDER = new("SCIENCE:USAPathfinder");
         private static readonly StarSlotRef STAR_A101    = new("CONTROLBAR:A10ThunderboltMissileStrike", "SCIENCE:USAA10Strike1");
         private static readonly StarSlotRef STAR_A102    = new("CONTROLBAR:A10ThunderboltMissileStrike", "SCIENCE:USAA10Strike2");
@@ -2004,6 +2038,9 @@ namespace LauncherWinUI.Pages
             ["spectregunshipfromshortcut"] = "Spectre Gunship",
             ["lasermissileattack"] = "Laser Missiles",
             ["detonatefakebuilding"] = "Detonate",
+            ["constructglatunnelnetwork"] = "Tunnel Network",
+            ["chem_constructglatunnelnetwork"] = "Toxin Network",
+            ["demo_constructglademotrap"] = "Demo Trap",
             ["glascudstormlaunched"] = "Launch Scud",
             ["rebelambush"] = "Rebel Ambush",
             ["anthraxbomb"] = "Anthrax Bomb",
@@ -2102,6 +2139,11 @@ namespace LauncherWinUI.Pages
 
         private bool _ccTabInitialized;
         private static Dictionary<string, string>? _csfLabels;
+        /// <summary>Only keys the user/tool actually changed — never write the full merged CSF dict to BIG.</summary>
+        private static Dictionary<string, string> _csfDirtyOverrides
+            = new(StringComparer.OrdinalIgnoreCase);
+        private static Dictionary<string, string>? _profileHotkeyOverrides;
+        private static string? _activeProfileName;
         private string _currentEditCsfId = "";
         private string _currentEditArmy    = "";
         private string _currentEditCsfKey  = "";
@@ -2112,7 +2154,21 @@ namespace LauncherWinUI.Pages
         private readonly Stack<string> _slotLabelUndo = new();
 
         private static readonly string[] _generalPrefixes =
-            { "lazr_", "airf_", "supw_", "nuke_", "infa_" };
+            { "lazr_", "airf_", "supw_", "nuke_", "infa_", "tank_", "chem_", "demo_", "stlh_", "slth_", "tox_" };
+
+        private static readonly Dictionary<string, string> _canonicalCsfBareIds
+            = CsfVariantKeys.CommandBarPascalBare;
+
+        private static bool HasVariantPrefix(string labelLower)
+        {
+            foreach (var pfx in _generalPrefixes)
+                if (labelLower.StartsWith(pfx, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private string FormatCsfIdDisplay(string csfId)
+            => ResolveCsfLabelKey(csfId);
 
         private const double UnitListIconSize = 44;
         private const double CommandCardSlotSize = 52;
@@ -2147,21 +2203,32 @@ namespace LauncherWinUI.Pages
         private bool IsGlobalLayoutMode()
             => string.Equals(cmbCommandCardArmy?.SelectedItem as string, CcArmyAll, StringComparison.Ordinal);
 
+        private static bool TryGetSlotDefs(string army, string mapKey, out List<CcSlotDef> slots)
+        {
+            string lookup = mapKey;
+            if (mapKey == "Barracks" && army == "GLA Toxin (Thrax)")
+                lookup = "Barracks (Toxin)";
+            return _ccSlotMap.TryGetValue(lookup, out slots!) && slots.Count > 0;
+        }
+
         private void InitCommandCardTab()
         {
             if (_ccTabInitialized) return;
             _ccTabInitialized = true;
 
-            // Merge all .big in the game folder (alphabetical load order; ! mods win).
+            // Merge game BIG stack (! mods first, then EnglishZH…) — profile BIGs excluded until selected.
             if (_csfLabels == null)
             {
                 string? gameDir = GameBigStack.DiscoverGameDirectory();
                 _csfLabels = gameDir != null
-                    ? GameBigStack.BuildMergedCsfLabels(gameDir)
+                    ? GameBigStack.BuildMergedCsfLabels(gameDir, excludeProfileBigs: true)
                     : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
                 ButtonImageReader.Load(gameDir);
             }
+
+            ClearProfileHotkeyOverrides();
+            _csfDirtyOverrides.Clear();
 
             cmbCommandCardArmy.Items.Clear();
             cmbCommandCardArmy.Items.Add(CcArmyAll);
@@ -2171,6 +2238,223 @@ namespace LauncherWinUI.Pages
                 cmbCommandCardArmy.SelectedIndex = 0;
 
             InitHotkeyStylePanel();
+            InitHotkeyProfileCombo();
+        }
+
+        private void InitHotkeyProfileCombo()
+        {
+            if (cmbHotkeyProfile == null) return;
+            cmbHotkeyProfile.Items.Clear();
+            cmbHotkeyProfile.Items.Add(HotkeyProfileService.ProfileCurrent);
+            cmbHotkeyProfile.Items.Add(HotkeyProfileService.ProfileLeikeze);
+            cmbHotkeyProfile.SelectedIndex = 0;
+        }
+
+        private void ClearProfileHotkeyOverrides()
+        {
+            _profileHotkeyOverrides = null;
+            _activeProfileName = null;
+        }
+
+        private void CmbHotkeyProfile_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_ccTabInitialized || cmbHotkeyProfile?.SelectedItem is not string profile)
+                return;
+
+            if (string.Equals(profile, HotkeyProfileService.ProfileCurrent, StringComparison.OrdinalIgnoreCase))
+            {
+                ClearProfileHotkeyOverrides();
+                ShowCommandCardStatus("Using CSF from game BIG files (! mod on top, then EnglishZH…).");
+            }
+            else if (!TryLoadProfileHotkeyOverrides(profile, out int count))
+            {
+                return;
+            }
+            else
+            {
+                ShowCommandCardStatus(
+                    $"{profile}: {count} hotkey(s) loaded as preview (not saved yet). «Apply profile» writes CSF to BIG.");
+            }
+
+            if (IsGlobalLayoutMode())
+                BuildGlobalLayoutCards();
+            else
+                RefreshCommandCardViewAfterBulk();
+        }
+
+        private bool TryLoadProfileHotkeyOverrides(string profileName, out int count)
+        {
+            count = 0;
+            if (string.Equals(profileName, HotkeyProfileService.ProfileCurrent, StringComparison.OrdinalIgnoreCase))
+            {
+                ClearProfileHotkeyOverrides();
+                return true;
+            }
+
+            string? gameDir = GameBigStack.DiscoverGameDirectory();
+            if (gameDir == null)
+            {
+                ShowCommandCardStatus("Game folder not found.", isError: true);
+                return false;
+            }
+
+            var profile = HotkeyProfileService.LoadProfileLabels(profileName, gameDir);
+            if (profile.Count == 0)
+            {
+                ShowCommandCardStatus(
+                    $"Profile file not found. Place !HotkeysLeikezeZH.big in:\n{gameDir}",
+                    isError: true);
+                ClearProfileHotkeyOverrides();
+                return false;
+            }
+
+            var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var labelKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (labelCsfId, imageCsfId) in EnumerateCommandCardLabelSlots())
+            {
+                string? profileText = HotkeyProfileService.TryGetProfileLabelText(profile, labelCsfId, imageCsfId);
+                if (profileText == null) continue;
+
+                char hk = HotkeyPainter.ExtractHotkeyChar(profileText);
+                if (hk == '\0') continue;
+
+                string labelKey = ResolveCsfLabelKey(labelCsfId);
+                if (!labelKeys.Add(labelKey)) continue;
+
+                string bare = BareCsfId(labelCsfId);
+                string newLabel = HotkeyProfileService.HasVariantPrefix(bare)
+                    ? profileText
+                    : CommandCardHotkeyService.ApplyHotkeyCharToLabel(
+                        GetCsfLabelRawTextFromBig(labelCsfId), hk);
+
+                overrides[labelKey] = newLabel;
+                count++;
+
+                if (HotkeyProfileService.TryGetVariantTooltipKey(bare) is { } tipLookup)
+                {
+                    string? tipText = HotkeyProfileService.TryGetProfileLabelText(profile, tipLookup, null);
+                    if (!string.IsNullOrEmpty(tipText))
+                    {
+                        overrides[ResolveCsfLabelKey(tipLookup)] = tipText;
+                        count++;
+                    }
+                }
+            }
+
+            _profileHotkeyOverrides = overrides;
+            _activeProfileName = profileName;
+            return true;
+        }
+
+        private void MarkCsfDirty(string key, string value)
+        {
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value)) return;
+            _csfDirtyOverrides[key] = value;
+        }
+
+        private Dictionary<string, string> GetEffectiveCsfLabelsForSave()
+        {
+            var result = _csfLabels != null
+                ? new Dictionary<string, string>(_csfLabels, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in _csfDirtyOverrides)
+                result[kv.Key] = kv.Value;
+            return result;
+        }
+
+        private int CommitProfileOverridesToCsf()
+        {
+            if (_profileHotkeyOverrides == null || _profileHotkeyOverrides.Count == 0)
+                return 0;
+
+            _csfLabels ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            int n = 0;
+            foreach (var kv in _profileHotkeyOverrides)
+            {
+                _csfLabels[kv.Key] = kv.Value;
+                MarkCsfDirty(kv.Key, kv.Value);
+                n++;
+            }
+            return n;
+        }
+
+        private IEnumerable<(string LabelCsfId, string ImageCsfId)> EnumerateCommandCardLabelSlots()
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var slots in _ccSlotMap.Values)
+            {
+                foreach (var slot in slots)
+                {
+                    string dedupe = slot.CsfId + "|" + slot.ImageLookupId;
+                    if (!seen.Add(dedupe)) continue;
+                    yield return (slot.CsfId, slot.ImageLookupId);
+                }
+            }
+
+            foreach (var stars in STAR_SLOT_MAP.Values)
+            {
+                foreach (var star in stars.Values)
+                {
+                    string dedupe = star.LabelCsfId + "|" + star.ImageCsfId;
+                    if (!seen.Add(dedupe)) continue;
+                    yield return (star.LabelCsfId, star.ImageCsfId);
+                }
+            }
+        }
+
+        private int ApplyHotkeyProfileLabels(string profileName)
+        {
+            if (string.Equals(profileName, HotkeyProfileService.ProfileCurrent, StringComparison.OrdinalIgnoreCase))
+                return 0;
+
+            if (_profileHotkeyOverrides == null
+             || !string.Equals(_activeProfileName, profileName, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!TryLoadProfileHotkeyOverrides(profileName, out _))
+                    return 0;
+            }
+
+            return CommitProfileOverridesToCsf();
+        }
+
+        private void BtnApplyHotkeyProfile_Click(object sender, RoutedEventArgs e)
+        {
+            if (_commandCardBusy) return;
+            string profile = cmbHotkeyProfile?.SelectedItem as string ?? HotkeyProfileService.ProfileCurrent;
+            if (string.Equals(profile, HotkeyProfileService.ProfileCurrent, StringComparison.OrdinalIgnoreCase))
+            {
+                ShowCommandCardStatus("Select a ready profile first (e.g. Leikeze).", isError: true);
+                return;
+            }
+
+            if (!ConfirmCommandCardAction(
+                $"Write «{profile}» hotkey labels to !EnglishZH.big?\n\n" +
+                "Uses the profile preview loaded from !HotkeysLeikezeZH.big.\n" +
+                "Use «Apply all keys to images» afterward to paint button art.\n\nAre you sure?"))
+                return;
+
+            int n = ApplyHotkeyProfileLabels(profile);
+            if (n == 0)
+            {
+                ShowCommandCardStatus("No matching hotkeys found in the profile file.", isError: true);
+                return;
+            }
+
+            if (!PersistCommandCardToBig(null))
+                return;
+
+            ClearProfileHotkeyOverrides();
+            if (cmbHotkeyProfile != null)
+                cmbHotkeyProfile.SelectedIndex = 0;
+
+            if (IsGlobalLayoutMode())
+                BuildGlobalLayoutCards();
+            else
+                RefreshCommandCardViewAfterBulk();
+
+            ShowCommandCardStatus(
+                $"{profile}: {n} label(s) saved to !EnglishZH.big. Paint images when ready.");
         }
 
         // ── Hotkey Image Style ───────────────────────────────────────────────
@@ -2421,7 +2705,7 @@ namespace LauncherWinUI.Pages
                 string? iconCsfId = null;
                 if (armyImageMap != null && armyImageMap.TryGetValue(name, out var overrideCsf))
                     iconCsfId = overrideCsf;
-                else if (_ccSlotMap.TryGetValue(name, out var slots))
+                else if (TryGetSlotDefs(army, name, out var slots))
                 {
                     var first = slots.OrderBy(s => s.Row * 10 + s.Col).FirstOrDefault();
                     iconCsfId = first?.ImageLookupId;
@@ -2539,7 +2823,7 @@ namespace LauncherWinUI.Pages
             else if (name == "Worker" && army == "GLA Toxin (Thrax)") lookupName = "Worker (Toxin)";
             else if (name == "Worker" && army == "GLA Demo (Juhziz)") lookupName = "Worker (Demo)";
 
-            if (!_ccSlotMap.TryGetValue(lookupName, out var slots) || slots.Count == 0)
+            if (!TryGetSlotDefs(army, lookupName, out var slots))
             {
                 CommandCardGridHost.Content = new TextBlock
                 {
@@ -2550,8 +2834,17 @@ namespace LauncherWinUI.Pages
                 return;
             }
 
+            bool isGlaWorker = lookupName is "Worker" or "Worker (Toxin)" or "Worker (Demo)";
+
             int maxRow = slots.Max(s => s.Row) + 1;
-            maxRow = Math.Max(maxRow, 2);
+            if (isGlaWorker)
+                maxRow = Math.Max(maxRow, 4);
+            else
+                maxRow = Math.Max(maxRow, 2);
+
+            int gridRowCount = isGlaWorker && maxRow >= 4 ? maxRow + 1 : maxRow;
+            int VisualRow(int slotRow) => isGlaWorker && slotRow >= 2 ? slotRow + 1 : slotRow;
+
             const int COLS = 7;
             double W = CommandCardSlotSize, H = CommandCardSlotSize;
 
@@ -2560,8 +2853,13 @@ namespace LauncherWinUI.Pages
 
             for (int c = 0; c < COLS; c++)
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(W) });
-            for (int r = 0; r < maxRow; r++)
-                grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(H) });
+            for (int r = 0; r < gridRowCount; r++)
+            {
+                if (isGlaWorker && r == 2)
+                    grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) });
+                else
+                    grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(H) });
+            }
 
             for (int r = 0; r < maxRow; r++)
             {
@@ -2571,7 +2869,7 @@ namespace LauncherWinUI.Pages
 
                     // Try to load the button icon image
                     var bmp = has ? ButtonImageReader.GetSlotImage(slot!.ImageLookupId, army) : null;
-                    string label = has ? FormatCcSlotId(slot!.CsfId) : "";
+                    string label = has ? GetCsfLabelRawText(slot!.CsfId) : "";
 
                     var btn = new System.Windows.Controls.Button
                     {
@@ -2645,13 +2943,27 @@ namespace LauncherWinUI.Pages
                         }
                     }
 
-                    Grid.SetRow(btn, r);
+                    Grid.SetRow(btn, VisualRow(r));
                     Grid.SetColumn(btn, c);
                     grid.Children.Add(btn);
                 }
             }
 
             CommandCardGridHost.Content = grid;
+        }
+
+        private static BitmapSource? GetStarSlotImage(StarSlotRef star, string army)
+        {
+            var bmp = ButtonImageReader.GetSlotImage(star.ImageCsfId, army);
+            if (bmp != null || star.ImageCsfId == star.LabelCsfId) return bmp;
+
+            bmp = ButtonImageReader.GetSlotImage(star.LabelCsfId, army);
+            if (bmp != null) return bmp;
+
+            if (star.LabelCsfId.Equals("CONTROLBAR:SpyDrone", StringComparison.OrdinalIgnoreCase))
+                return ButtonImageReader.GetSlotImage("OBJECT:SpyDrone", army);
+
+            return null;
         }
 
         private void BuildStarPowerGrid(Dictionary<int, StarSlotRef> starSlots, string army)
@@ -2693,8 +3005,8 @@ namespace LauncherWinUI.Pages
 
                     bool has = starSlots.TryGetValue(slotNum, out var starSlot);
 
-                    var bmp   = has ? ButtonImageReader.GetSlotImage(starSlot!.ImageCsfId, army) : null;
-                    string label = has ? FormatCcSlotId(starSlot!.LabelCsfId) : "";
+                    var bmp = has ? GetStarSlotImage(starSlot!, army) : null;
+                    string label = has ? GetCsfLabelRawText(starSlot!.LabelCsfId) : "";
 
                     var btn = new System.Windows.Controls.Button
                     {
@@ -2789,7 +3101,7 @@ namespace LauncherWinUI.Pages
             _currentEditCsfKey = ResolveCsfLabelKey(labelCsfId);
 
             SlotInfoPanel.Visibility = Visibility.Visible;
-            lblSlotId.Text = labelCsfId;
+            lblSlotId.Text = FormatCsfIdDisplay(labelCsfId);
 
             var bmp = ButtonImageReader.GetSlotImage(imageCsfId, army);
             imgSlotPreview.Source = bmp;
@@ -2806,34 +3118,94 @@ namespace LauncherWinUI.Pages
         {
             if (_csfLabels is { Count: > 0 })
             {
-                if (_csfLabels.ContainsKey(labelCsfId))
-                    return labelCsfId;
+                string resolved = CsfVariantKeys.ResolveStorageKey(labelCsfId, _csfLabels);
+                if (_csfLabels.ContainsKey(resolved))
+                    return resolved;
 
-                int ci = labelCsfId.IndexOf(':');
-                string bare = ci >= 0 ? labelCsfId[(ci + 1)..] : labelCsfId;
-                if (_csfLabels.ContainsKey(bare))
-                    return bare;
-
-                foreach (var pfx in _generalPrefixes)
+                foreach (var key in _csfLabels.Keys)
                 {
-                    if (!bare.StartsWith(pfx, StringComparison.OrdinalIgnoreCase)) continue;
-                    string stripped = bare[pfx.Length..];
-                    if (_csfLabels.ContainsKey(stripped))
-                        return stripped;
-                    string strippedFull = ci >= 0 ? labelCsfId[..(ci + 1)] + stripped : stripped;
-                    if (_csfLabels.ContainsKey(strippedFull))
-                        return strippedFull;
+                    if (string.Equals(key, resolved, StringComparison.OrdinalIgnoreCase))
+                        return key;
+                }
+
+                string normalized = CsfVariantKeys.NormalizeStorage(labelCsfId);
+                string bare = CsfVariantKeys.BareId(normalized);
+                if (!HasVariantPrefix(bare))
+                {
+                    foreach (var pfx in _generalPrefixes)
+                    {
+                        if (!bare.StartsWith(pfx, StringComparison.OrdinalIgnoreCase)) continue;
+                        string stripped = bare[pfx.Length..];
+                        if (_csfLabels.ContainsKey(stripped))
+                            return stripped;
+                        string strippedFull = "controlbar:" + stripped;
+                        if (_csfLabels.ContainsKey(strippedFull))
+                            return strippedFull;
+                        break;
+                    }
                 }
             }
-            return labelCsfId;
+
+            return CsfVariantKeys.ResolveStorageKey(labelCsfId, _csfLabels);
+        }
+
+        private string GetCsfLabelRawTextFromBig(string labelCsfId)
+        {
+            if (_csfLabels != null
+             && CsfVariantKeys.TryGetLabelText(_csfLabels, labelCsfId, out _, out var text))
+            {
+                if (HotkeyPainter.ExtractHotkeyChar(text) != '\0')
+                    return CsfFirstLine(text);
+                if (TrySynthesizeVariantLabel(labelCsfId, out var grafted))
+                    return grafted;
+                return CsfFirstLine(text);
+            }
+
+            if (TrySynthesizeVariantLabel(labelCsfId, out var synthesized))
+                return synthesized;
+
+            return FormatCcSlotId(labelCsfId);
+        }
+
+        private bool TrySynthesizeVariantLabel(string labelCsfId, out string synthesized)
+        {
+            synthesized = "";
+            if (_csfLabels == null) return false;
+
+            string bare = CsfVariantKeys.BareId(CsfVariantKeys.NormalizeStorage(labelCsfId));
+            if (!CsfVariantKeys.CommandBarPascalBare.ContainsKey(bare)
+             && !HasVariantPrefix(bare))
+                return false;
+
+            string vanillaBare = bare;
+            foreach (var pfx in _generalPrefixes)
+            {
+                if (!bare.StartsWith(pfx, StringComparison.OrdinalIgnoreCase)) continue;
+                vanillaBare = bare[pfx.Length..];
+                break;
+            }
+
+            if (!CsfVariantKeys.TryGetLabelText(_csfLabels, "controlbar:" + vanillaBare, out _, out var vanillaText))
+                return false;
+
+            char hk = HotkeyPainter.ExtractHotkeyChar(vanillaText);
+            if (hk == '\0') return false;
+
+            if (!_ccLabels.TryGetValue(bare, out var displayName) || string.IsNullOrEmpty(displayName))
+                return false;
+
+            synthesized = CommandCardHotkeyService.ApplyHotkeyCharToLabel(displayName, hk);
+            return true;
         }
 
         private string GetCsfLabelRawText(string labelCsfId)
         {
             string key = ResolveCsfLabelKey(labelCsfId);
-            if (_csfLabels != null && _csfLabels.TryGetValue(key, out var text) && !string.IsNullOrEmpty(text))
-                return CsfFirstLine(text);
-            return FormatCcSlotId(labelCsfId);
+            if (_profileHotkeyOverrides != null
+             && _profileHotkeyOverrides.TryGetValue(key, out var profileText)
+             && !string.IsNullOrEmpty(profileText))
+                return CsfFirstLine(profileText);
+            return GetCsfLabelRawTextFromBig(labelCsfId);
         }
 
         private static char ParseSingleKey(TextBox? tb)
@@ -2851,7 +3223,7 @@ namespace LauncherWinUI.Pages
             lblCommandCardStatus.Visibility = Visibility.Visible;
         }
 
-        private void SetCommandCardBusy(bool busy, string message = "")
+        private void SetCommandCardBusy(bool busy, string message = "", int progressTotal = 0)
         {
             _commandCardBusy = busy;
             if (PanelCommandCardProgress != null)
@@ -2859,7 +3231,15 @@ namespace LauncherWinUI.Pages
             if (lblCommandCardProgress != null && !string.IsNullOrWhiteSpace(message))
                 lblCommandCardProgress.Text = message;
 
+            if (pbCommandCardProgress != null)
+            {
+                pbCommandCardProgress.IsIndeterminate = false;
+                pbCommandCardProgress.Maximum = Math.Max(progressTotal, 1);
+                pbCommandCardProgress.Value = busy ? 0 : pbCommandCardProgress.Maximum;
+            }
+
             if (btnApplyAllKeysFromLabels != null) btnApplyAllKeysFromLabels.IsEnabled = !busy;
+            if (btnApplyHotkeyProfile != null) btnApplyHotkeyProfile.IsEnabled = !busy;
             if (btnApplyNormalLabelsBuildings != null) btnApplyNormalLabelsBuildings.IsEnabled = !busy;
             if (btnApplyNormalImagesBuildings != null) btnApplyNormalImagesBuildings.IsEnabled = !busy;
             if (btnApplyNormalLabelsUnits != null) btnApplyNormalLabelsUnits.IsEnabled = !busy;
@@ -2873,9 +3253,29 @@ namespace LauncherWinUI.Pages
                 UpdateSlotApplyButtonsState();
         }
 
+        private void UpdateCommandCardProgress(int current, int total, string phase)
+        {
+            if (pbCommandCardProgress != null)
+            {
+                pbCommandCardProgress.Maximum = Math.Max(total, 1);
+                pbCommandCardProgress.Value = Math.Clamp(current, 0, total);
+            }
+
+            if (lblCommandCardProgress == null) return;
+            int pct = total > 0 ? (int)Math.Round(100.0 * current / total) : 0;
+            lblCommandCardProgress.Text = total > 0
+                ? $"{phase} — {current}/{total} ({pct}%)"
+                : phase;
+        }
+
         private bool PersistCommandCardToBig(Dictionary<string, byte[]>? tgaPatches)
         {
-            if (_csfLabels == null) return false;
+            if (_csfDirtyOverrides.Count == 0 && (tgaPatches == null || tgaPatches.Count == 0))
+            {
+                ShowCommandCardStatus("Nothing to save.", isError: true);
+                return false;
+            }
+            if (_csfLabels == null && _profileHotkeyOverrides == null) return false;
             string bigPath = FindEnglishZhBig();
             if (!File.Exists(bigPath))
             {
@@ -2883,7 +3283,7 @@ namespace LauncherWinUI.Pages
                 return false;
             }
 
-            string? outPath = BigCsfWriter.RebuildAll(bigPath, _csfLabels, tgaPatches);
+            string? outPath = BigCsfWriter.RebuildAll(bigPath, GetEffectiveCsfLabelsForSave(), tgaPatches);
             if (outPath == null)
             {
                 ShowCommandCardStatus("Failed to save BIG file.", isError: true);
@@ -2901,6 +3301,18 @@ namespace LauncherWinUI.Pages
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question) == MessageBoxResult.Yes;
 
+        private HashSet<string> GetRelevantSlotMapKeys(string army)
+        {
+            if (!_ccArmyData.TryGetValue(army, out var data))
+                return new HashSet<string>(_ccSlotMap.Keys, StringComparer.OrdinalIgnoreCase);
+
+            var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var b in data.Buildings) keys.Add(b);
+            foreach (var u in data.Units) keys.Add(u);
+            keys.Add("General Powers");
+            return keys;
+        }
+
         private List<CommandCardHotkeyService.SlotBinding> CollectBindingsForArmy(
             string army,
             bool includeNormal = true,
@@ -2909,11 +3321,13 @@ namespace LauncherWinUI.Pages
         {
             var list = new List<CommandCardHotkeyService.SlotBinding>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var relevantMaps = GetRelevantSlotMapKeys(army);
 
             if (includeNormal)
             {
                 foreach (var (mapKey, slots) in _ccSlotMap)
                 {
+                    if (!relevantMaps.Contains(mapKey)) continue;
                     if (!MatchesCcNormalScope(mapKey, normalScope)) continue;
                     foreach (var slot in slots)
                     {
@@ -3138,6 +3552,7 @@ namespace LauncherWinUI.Pages
                     if (!labelKeys.Add(labelKey)) continue;
                     string raw = GetCsfLabelRawText(slot.CsfId);
                     _csfLabels[labelKey] = CommandCardHotkeyService.ApplyHotkeyCharToLabel(raw, key);
+                    _profileHotkeyOverrides?.Remove(labelKey);
                     updated++;
                 }
             }
@@ -3161,6 +3576,7 @@ namespace LauncherWinUI.Pages
                 string labelKey = ResolveCsfLabelKey(star.LabelCsfId);
                 string raw = GetCsfLabelRawText(star.LabelCsfId);
                 _csfLabels[labelKey] = CommandCardHotkeyService.ApplyHotkeyCharToLabel(raw, key);
+                _profileHotkeyOverrides?.Remove(labelKey);
                 updated++;
             }
             return updated;
@@ -3277,17 +3693,24 @@ namespace LauncherWinUI.Pages
                 return false;
             }
 
-            var labelsSnapshot = new Dictionary<string, string>(_csfLabels, StringComparer.OrdinalIgnoreCase);
-            SetCommandCardBusy(true, $"Working on {scopeDescription}... Building image patches and saving BIG.");
+            var labelsSnapshot = GetEffectiveCsfLabelsForSave();
+            int bindingCount = bindings.Count;
+            SetCommandCardBusy(true, $"Working on {scopeDescription}...", bindingCount);
+
+            var progress = new Progress<int>(done =>
+                UpdateCommandCardProgress(done, bindingCount, "Painting slots"));
 
             try
             {
                 var styleSnapshot = _hotkeyStyle;
                 var result = await Task.Run(() =>
                 {
-                    var patches = CommandCardHotkeyService.BuildTgaPatches(bindings, styleSnapshot);
+                    var patches = CommandCardHotkeyService.BuildTgaPatches(bindings, styleSnapshot, progress);
                     if (patches.Count == 0)
                         return (Success: false, Error: "Could not resolve TGA atlas mappings.", PatchCount: 0);
+
+                    Dispatcher.Invoke(() =>
+                        UpdateCommandCardProgress(bindingCount, bindingCount, "Saving BIG file"));
 
                     string? outPath = BigCsfWriter.RebuildAll(bigPath, labelsSnapshot, patches);
                     if (outPath == null)
@@ -3424,6 +3847,21 @@ namespace LauncherWinUI.Pages
             if (_suppressSlotEditor || lblSlotText == null) return;
 
             string text = lblSlotText.Text;
+            char hk = HotkeyPainter.ExtractHotkeyChar(text);
+            if (hk != '\0')
+            {
+                string normalized = CommandCardHotkeyService.SetHotkeyCharInLabel(text, hk);
+                if (normalized != text)
+                {
+                    int caret = lblSlotText.CaretIndex;
+                    _suppressSlotEditor = true;
+                    lblSlotText.Text = normalized;
+                    lblSlotText.CaretIndex = Math.Min(Math.Max(caret, 0), normalized.Length);
+                    _suppressSlotEditor = false;
+                    text = normalized;
+                }
+            }
+
             SyncSlotKeyFromLabel(text);
             if (lblSlotFormatted != null)
                 ApplyHotkeyFormatting(lblSlotFormatted, text);
@@ -3490,6 +3928,8 @@ namespace LauncherWinUI.Pages
 
             _csfLabels ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _csfLabels[_currentEditCsfKey] = labelText;
+            MarkCsfDirty(_currentEditCsfKey, labelText);
+            _profileHotkeyOverrides?.Remove(_currentEditCsfKey);
 
             if (!PersistCommandCardToBig(tgaPatches: null))
             {
@@ -3524,6 +3964,8 @@ namespace LauncherWinUI.Pages
 
             _csfLabels ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _csfLabels[_currentEditCsfKey] = labelText;
+            MarkCsfDirty(_currentEditCsfKey, labelText);
+            _profileHotkeyOverrides?.Remove(_currentEditCsfKey);
 
             if (!await ApplyHotkeyImagePatchesAsync(new List<CommandCardHotkeyService.SlotBinding>
                 {
@@ -3560,7 +4002,7 @@ namespace LauncherWinUI.Pages
                         tb.Inlines.Add(new System.Windows.Documents.Run("&")
                             { Foreground = normal, FontSize = tb.FontSize * 0.85 });
                         i++;
-                        tb.Inlines.Add(new System.Windows.Documents.Run(raw[i].ToString())
+                        tb.Inlines.Add(new System.Windows.Documents.Run(char.ToUpperInvariant(raw[i]).ToString())
                             { Foreground = hotkey });
                         i++;
                     }
@@ -3582,27 +4024,37 @@ namespace LauncherWinUI.Pages
         private static string FormatCcSlotId(string csfId)
         {
             // ── 1. Try game CSF (EnglishZH.big) ──────────────────────────────
+            if (_csfLabels is { Count: > 0 }
+             && CsfVariantKeys.TryGetLabelText(_csfLabels, csfId, out _, out var v)
+             && HotkeyPainter.ExtractHotkeyChar(v) != '\0')
+                return CsfFirstLine(v);
+
             if (_csfLabels is { Count: > 0 })
             {
-                // Direct match: e.g. "controlbar:sell"
-                if (_csfLabels.TryGetValue(csfId, out var v))
+                if (_csfLabels.TryGetValue(csfId, out v))
                     return CsfFirstLine(v);
 
-                // Strip general-specific prefix then retry
-                // e.g. "controlbar:infa_constructchinainfantryhacker"
-                //       → "controlbar:constructchinainfantryhacker"
                 int ci = csfId.IndexOf(':');
                 if (ci >= 0)
                 {
                     string ns  = csfId[..ci];
                     string seg = csfId[(ci + 1)..];
-                    foreach (var pfx in _generalPrefixes)
+
+                    if (_csfLabels.TryGetValue(NormalizeCsfIdStorage(csfId), out v)
+                     || _csfLabels.TryGetValue("controlbar:" + seg.ToLowerInvariant(), out v)
+                     || _csfLabels.TryGetValue(ns + ":" + seg, out v))
+                        return CsfFirstLine(v);
+
+                    if (!HasVariantPrefix(seg))
                     {
-                        if (seg.StartsWith(pfx, StringComparison.OrdinalIgnoreCase))
+                        foreach (var pfx in _generalPrefixes)
                         {
-                            if (_csfLabels.TryGetValue(ns + ":" + seg[pfx.Length..], out v))
-                                return CsfFirstLine(v);
-                            break;
+                            if (seg.StartsWith(pfx, StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (_csfLabels.TryGetValue(ns + ":" + seg[pfx.Length..], out v))
+                                    return CsfFirstLine(v);
+                                break;
+                            }
                         }
                     }
                 }

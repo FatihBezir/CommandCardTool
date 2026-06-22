@@ -99,26 +99,45 @@ internal static class CommandCardHotkeyService
     /// <summary>Aynı atlas dosyasındaki birden fazla bölgeye sırayla kısayol harfi boyar.</summary>
     public static Dictionary<string, byte[]> BuildTgaPatches(
         IEnumerable<SlotBinding> bindings,
-        HotkeyStyle? style = null)
+        HotkeyStyle? style = null,
+        IProgress<int>? progress = null)
     {
+        var list = bindings as IReadOnlyList<SlotBinding> ?? bindings.ToList();
+        int total = list.Count;
         var atlasBytes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        var paintStyle = style ?? HotkeyStyle.Default;
 
-        foreach (var b in bindings)
+        for (int i = 0; i < total; i++)
         {
+            var b = list[i];
             char hk = HotkeyPainter.ExtractHotkeyChar(b.LabelText);
-            if (hk == '\0') continue;
-
-            var info = ButtonImageReader.ResolveTgaSlot(b.ImageCsfId, b.Army);
-            if (info == null) continue;
-
-            if (!atlasBytes.TryGetValue(info.EntryName, out byte[]? bytes))
+            if (hk != '\0')
             {
-                bytes = ButtonImageReader.ReadTgaEntry(info.EntryName);
-                if (bytes == null) continue;
+                var info = ButtonImageReader.ResolveTgaSlot(b.ImageCsfId, b.Army);
+                if (info != null)
+                {
+                    if (!atlasBytes.TryGetValue(info.EntryName, out byte[]? bytes))
+                        bytes = ButtonImageReader.ReadTgaEntry(info.EntryName);
+
+                    if (bytes != null)
+                    {
+                        byte[] painted = TgaPatcher.PaintHotkey(
+                            bytes, info.Left, info.Top, info.Right, info.Bottom, hk, paintStyle);
+                        atlasBytes[info.EntryName] = painted;
+
+                        foreach (var twinName in ButtonImageReader.FindTwinEntryNames(info.EntryName))
+                        {
+                            if (atlasBytes.ContainsKey(twinName)) continue;
+                            byte[]? twinRaw = ButtonImageReader.ReadTgaEntry(twinName);
+                            if (twinRaw == null) continue;
+                            atlasBytes[twinName] = TgaPatcher.PaintHotkey(
+                                twinRaw, info.Left, info.Top, info.Right, info.Bottom, hk, paintStyle);
+                        }
+                    }
+                }
             }
 
-            atlasBytes[info.EntryName] = TgaPatcher.PaintHotkey(
-                bytes, info.Left, info.Top, info.Right, info.Bottom, hk, style);
+            progress?.Report(i + 1);
         }
 
         return atlasBytes;

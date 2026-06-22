@@ -910,13 +910,13 @@
                                      Checked="CcFilter_Checked"/>
                     </StackPanel>
 
-                    <Button x:Name="btnApplyAllKeysFromLabels" Content="Apply all keys to images (from labels)"
+                    <Button x:Name="btnApplyAllKeysFromLabels" Content="Apply default game keys to images"
                             Margin="0,8,0,0" HorizontalAlignment="Left" Padding="14,6" FontSize="11"
                             FontWeight="Bold" Cursor="Hand" Background="#1A3060" Foreground="#FFDD33"
                             BorderBrush="#2980FF" BorderThickness="1"
                             Click="BtnApplyAllKeysFromLabels_Click"
-                            ToolTip="Reads each slot's current CSF label (&amp; shortcut) and paints that letter on the button image."/>
-                    <TextBlock Text="Uses the &amp; shortcut already in each label (vanilla / saved CSF) — all armies, all slots."
+                            ToolTip="Reads each slot's hotkey from game CSF (EnglishZH.big / !EnglishZH.big), writes variant labels (Toxin tunnel, …), and paints button art. No profile needed."/>
+                    <TextBlock Text="Uses default in-game &amp; shortcuts (vanilla CSF). Toxin/Demo variants inherit the matching vanilla key (e.g. Tunnel &amp;Network → Toxin &amp;Network)."
                                Foreground="#666688" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
                     <Border x:Name="PanelCommandCardProgress"
                             Visibility="Collapsed"
@@ -926,7 +926,8 @@
                             <TextBlock x:Name="lblCommandCardProgress"
                                        Text="Working..."
                                        Foreground="#FFDD33" FontSize="11" Margin="0,0,0,5"/>
-                            <ProgressBar Height="8" IsIndeterminate="True"
+                            <ProgressBar x:Name="pbCommandCardProgress" Height="8"
+                                         Minimum="0" Maximum="100" Value="0"
                                          Background="#111830" Foreground="#2980FF"/>
                         </StackPanel>
                     </Border>

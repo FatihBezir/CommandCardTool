@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\CommandCardTool\Services\BigCsfReader.cs" Link="BigCsfReader.cs" />
+    <Compile Include="..\..\CommandCardTool\Services\BigArchiveIndex.cs" Link="BigArchiveIndex.cs" />
+    <Compile Include="..\..\CommandCardTool\Services\CsfCodec.cs" Link="CsfCodec.cs" />
+    <Compile Include="..\..\CommandCardTool\Services\CsfVariantKeys.cs" Link="CsfVariantKeys.cs" />
+    <Compile Include="..\..\CommandCardTool\Services\BigCsfWriter.cs" Link="BigCsfWriter.cs" />
+    <Compile Include="..\..\CommandCardTool\Services\CommandMapService.cs" Link="CommandMapService.cs" />
+  </ItemGroup>
+</Project>

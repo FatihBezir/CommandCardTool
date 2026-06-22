@@ -131,6 +131,7 @@ internal static class ButtonImageReader
     /// </summary>
     public static TgaSlotInfo? ResolveTgaSlot(string csfId, string army)
     {
+        csfId = AdjustCsfForArmyCrop(csfId, army);
         // Reuse same resolution order as GetSlotImage
         string baseLabel = ExtractBaseLabel(csfId).ToLowerInvariant();
         string ns = csfId.Contains(':') ? csfId.Split(':')[0] : "controlbar";
@@ -157,8 +158,8 @@ internal static class ButtonImageReader
                 }
             }
 
-            // 3. Base-label fallback
-            if (baseLabel != label)
+            // 3. Base-label fallback — skip when label is already a general variant (chem_, demo_, etc.)
+            if (baseLabel != label && !HasVariantPrefix(label))
             {
                 string baseId = ns + ":" + baseLabel;
                 if (_cbLabel.TryGetValue(baseId, out var biBase)
@@ -182,9 +183,37 @@ internal static class ButtonImageReader
 
     private static TgaSlotInfo? ResolveEntryFromMappedName(string miName)
     {
-        if (!_mapped.TryGetValue(miName, out var def)) return null;
         if (_tgaEntriesByStem.Count == 0) return null;
 
+        foreach (var name in MappedNameCandidates(miName))
+        {
+            if (_mapped.TryGetValue(name, out var def))
+            {
+                var info = BuildTgaSlotInfo(def);
+                if (info != null) return info;
+            }
+
+            if (!name.EndsWith("_L", StringComparison.OrdinalIgnoreCase)
+             && _mapped.TryGetValue(name + "_L", out def))
+            {
+                var info = BuildTgaSlotInfo(def);
+                if (info != null) return info;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> MappedNameCandidates(string miName)
+    {
+        yield return miName;
+        // Toxin tunnel — CommandButton.ini: SUToxicTunnel; vanilla tunnel building uses SUTunnel
+        if (string.Equals(miName, "SUToxicTunnel", StringComparison.OrdinalIgnoreCase))
+            yield return "SUTunnel";
+    }
+
+    private static TgaSlotInfo? BuildTgaSlotInfo(MappedDef def)
+    {
         string texStem = Path.GetFileNameWithoutExtension(def.Texture).ToLowerInvariant();
         return _tgaEntriesByStem.TryGetValue(texStem, out var entry)
             ? new TgaSlotInfo(entry.EntryName, def.Left, def.Top, def.Right, def.Bottom)
@@ -196,6 +225,23 @@ internal static class ButtonImageReader
     {
         if (!_tgaEntries.TryGetValue(entryName, out var e)) return null;
         return BigArchiveIndex.ReadEntryBytes(e.BigPath, e.Offset, e.Size);
+    }
+
+    /// <summary>Same atlas path with swapped .tga/.dds extension (HD BIGs often ship both).</summary>
+    public static IEnumerable<string> FindTwinEntryNames(string entryName)
+    {
+        string ext = Path.GetExtension(entryName);
+        if (!ext.Equals(".tga", StringComparison.OrdinalIgnoreCase)
+         && !ext.Equals(".dds", StringComparison.OrdinalIgnoreCase))
+            yield break;
+
+        string twinFile = Path.GetFileName(entryName[..^ext.Length]
+            + (ext.Equals(".tga", StringComparison.OrdinalIgnoreCase) ? ".dds" : ".tga"));
+        foreach (var name in _tgaEntries.Keys)
+        {
+            if (string.Equals(Path.GetFileName(name), twinFile, StringComparison.OrdinalIgnoreCase))
+                yield return name;
+        }
     }
 
     // ── INI parsing ─────────────────────────────────────────────────────────
@@ -272,34 +318,89 @@ internal static class ButtonImageReader
 
     private static void ParseCommandButtons(string iniText)
     {
-        string curLabel = "", curBtnImg = "";
+        string curBlock = "", curLabel = "", curBtnImg = "", curScience = "";
 
         foreach (var rawLine in iniText.Split('\n'))
         {
             var line = rawLine.Trim();
             if (line.StartsWith("CommandButton ", StringComparison.OrdinalIgnoreCase))
             {
-                curLabel = ""; curBtnImg = "";
+                curBlock = line["CommandButton ".Length..].Trim();
+                curLabel = ""; curBtnImg = ""; curScience = "";
             }
             else if (line.Equals("End", StringComparison.OrdinalIgnoreCase)
                   || line.StartsWith("End ", StringComparison.OrdinalIgnoreCase))
             {
                 if (curLabel != "" && curBtnImg != "")
                     _cbLabel.TryAdd(curLabel.ToLowerInvariant(), curBtnImg);
-                curLabel = ""; curBtnImg = "";
+                RegisterScienceCsfKeys(curScience, curBtnImg, curBlock);
+                curBlock = ""; curLabel = ""; curBtnImg = ""; curScience = "";
             }
             else if (line.StartsWith("TextLabel", StringComparison.OrdinalIgnoreCase)
                      && line.Contains('='))
                 curLabel = line.Split('=', 2)[1].Split(';')[0].Trim();
+            else if (line.StartsWith("Science", StringComparison.OrdinalIgnoreCase)
+                     && line.Contains('=')
+                     && !line.StartsWith("ScienceRequired", StringComparison.OrdinalIgnoreCase))
+                curScience = line.Split('=', 2)[1].Split(';')[0].Trim();
             else if (line.StartsWith("ButtonImage", StringComparison.OrdinalIgnoreCase)
                      && line.Contains('='))
                 curBtnImg = line.Split('=', 2)[1].Split(';')[0].Trim();
         }
     }
 
+    private static readonly string[] _scienceBlockVariantMarkers =
+        { "Tank_", "Nuke_", "Infa_", "Airf_", "Lazr_", "Supw_", "Chem_", "Stlh_", "Demo_", "Tox_" };
+
+    private static bool IsVariantScienceButton(string blockName)
+    {
+        foreach (var m in _scienceBlockVariantMarkers)
+            if (blockName.StartsWith(m, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// PURCHASE_SCIENCE buttons often have no TextLabel — index by Science= field instead.
+    /// CSF uses SCIENCE:ChinaNukeLauncher while INI has SCIENCE_NukeLauncher.
+    /// </summary>
+    private static void RegisterScienceCsfKeys(string scienceField, string buttonImage, string blockName)
+    {
+        if (string.IsNullOrEmpty(scienceField) || string.IsNullOrEmpty(buttonImage)) return;
+
+        string bare = scienceField.StartsWith("SCIENCE_", StringComparison.OrdinalIgnoreCase)
+            ? scienceField[8..]
+            : scienceField;
+        string bareLower = bare.ToLowerInvariant();
+
+        if (bare.StartsWith("Infa_SCIENCE_", StringComparison.OrdinalIgnoreCase))
+            bareLower = "infa_" + bare[13..].ToLowerInvariant();
+        else if (bare.StartsWith("Nuke_SCIENCE_", StringComparison.OrdinalIgnoreCase))
+            bareLower = "nuke_" + bare[13..].ToLowerInvariant();
+
+        bool isVariant = IsVariantScienceButton(blockName);
+
+        AddScienceLabel($"science:{bareLower}", buttonImage, isVariant);
+        AddScienceLabel($"science:china{bareLower}", buttonImage, isVariant);
+        AddScienceLabel($"science:gla{bareLower}", buttonImage, isVariant);
+        AddScienceLabel($"science:usa{bareLower}", buttonImage, isVariant);
+    }
+
+    private static void AddScienceLabel(string key, string image, bool isVariant)
+    {
+        key = key.ToLowerInvariant();
+        if (_cbLabel.TryGetValue(key, out _))
+        {
+            if (!isVariant) _cbLabel[key] = image;
+        }
+        else
+        {
+            _cbLabel.TryAdd(key, image);
+        }
+    }
+
     // Variant prefixes (same set as web extractBaseLabel)
     private static readonly string[] _variantPrefixes =
-        { "nuke_", "infa_", "tank_", "airf_", "lazr_", "supw_", "chem_", "stlh_", "boss_", "demo_", "tox_" };
+        { "nuke_", "infa_", "tank_", "airf_", "lazr_", "supw_", "chem_", "stlh_", "slth_", "boss_", "demo_", "tox_" };
 
     /// <summary>Strips namespace and variant prefix — mirrors JS extractBaseLabel().</summary>
     private static string ExtractBaseLabel(string csfLabel)
@@ -311,10 +412,19 @@ internal static class ButtonImageReader
         return name;
     }
 
+    private static bool HasVariantPrefix(string labelLower)
+    {
+        foreach (var pfx in _variantPrefixes)
+            if (labelLower.StartsWith(pfx, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
     // ── Image resolution ────────────────────────────────────────────────────
 
     private static BitmapSource? Resolve(string csfId, string army)
     {
+        csfId = AdjustCsfForArmyCrop(csfId, army);
         // Pre-compute base label (variant prefix stripped) like web extractBaseLabel()
         string baseLabel = ExtractBaseLabel(csfId).ToLowerInvariant();
         string ns = csfId.Contains(':') ? csfId.Split(':')[0] : "controlbar";
@@ -341,11 +451,8 @@ internal static class ButtonImageReader
                 }
             }
 
-            // 3. Base-label fallback (web extractBaseLabel strategy):
-            //    strip variant prefix from csfId and look up base in _cbLabel.
-            //    e.g. "controlbar:nuke_constructchinapowerplant"
-            //         → try "controlbar:constructchinapowerplant" which IS in _cbLabel.
-            if (baseLabel != label)
+            // 3. Base-label fallback — skip when label is already a general variant (chem_, demo_, etc.)
+            if (baseLabel != label && !HasVariantPrefix(label))
             {
                 string baseId = ns + ":" + baseLabel;
                 if (_cbLabel.TryGetValue(baseId, out var biBase)
@@ -381,11 +488,12 @@ internal static class ButtonImageReader
         else if (army.Contains("Nuke")        || army.Contains("Tao"))       prefix = "nuke_";
         else if (army.Contains("Infantry")    || army.Contains("Shin"))      prefix = "infa_";
         else if (army.Contains("Tank")        || army.Contains("Kwai"))      prefix = "tank_";
-        else if (army.Contains("Toxin")       || army.Contains("Thrax"))     prefix = "tox_";
+        else if (army.Contains("Toxin")       || army.Contains("Thrax"))     prefix = "chem_";
         else if (army.Contains("Demo")        || army.Contains("Juhziz"))    prefix = "demo_";
         else if (army.Contains("Stealth")     || army.Contains("Kassad"))    prefix = "stlh_";
 
-        if (prefix != null)
+        // Add army prefix only when csfId is still the vanilla label (no variant prefix yet).
+        if (prefix != null && !HasVariantPrefix(label))
         {
             string varLabel = prefix + label;
             if (_manualOverrides.ContainsKey(varLabel) || _cbLabel.ContainsKey(ns + ":" + varLabel))
@@ -394,10 +502,38 @@ internal static class ButtonImageReader
         yield return csfId;
     }
 
+    /// <summary>GLA Toxin star Ambush 2/3 use different MappedImage names (web adjustCsfLabelForArmyCrop).</summary>
+    private static string AdjustCsfForArmyCrop(string csfId, string army)
+    {
+        if (string.IsNullOrEmpty(army)) return csfId;
+        if (!army.Contains("Toxin", StringComparison.OrdinalIgnoreCase)
+         && !army.Contains("Thrax", StringComparison.OrdinalIgnoreCase))
+            return csfId;
+
+        string ns = csfId.Contains(':') ? csfId[..(csfId.IndexOf(':') + 1)] : "science:";
+        string part = (csfId.Contains(':') ? csfId.Split(':')[^1] : csfId).ToLowerInvariant();
+        return part switch
+        {
+            "glarebelambush2" => ns + "tox_star_glarebelambush2",
+            "glarebelambush3" => ns + "tox_star_glarebelambush3",
+            _ => csfId,
+        };
+    }
+
     private static BitmapSource? CropByMappedName(string name)
     {
-        if (!_mapped.TryGetValue(name, out var def)) return null;
-        return CropTga(def.Texture, def.Left, def.Top, def.Right, def.Bottom);
+        if (_mapped.TryGetValue(name, out var def))
+        {
+            var img = CropTga(def.Texture, def.Left, def.Top, def.Right, def.Bottom);
+            if (img != null) return img;
+        }
+
+        // Primary icon may live on a missing atlas (e.g. SAScout on 003); try _L on 001.
+        if (!name.EndsWith("_L", StringComparison.OrdinalIgnoreCase)
+         && _mapped.TryGetValue(name + "_L", out def))
+            return CropTga(def.Texture, def.Left, def.Top, def.Right, def.Bottom);
+
+        return null;
     }
 
     // ── TGA reading from the winning BIG in Zero Hour load order ─────────────
@@ -585,9 +721,11 @@ internal static class ButtonImageReader
         ["supw_constructamericapowerplant"]          = "SAPowerPlantSW_L",
         ["constructamericapatriotbattery"]           = "SAPatriot",
         ["lazr_constructamericapatriotbattery"]      = "SALaserPatr",
+        ["lazr_constructamericatankcrusader"]        = "SALsrTank",
         ["supw_constructamericapatriotbattery"]      = "SAMicroPat_L",
         ["constructamericavehiclechinook"]           = "SAChinook",
         ["airf_constructamericavehiclechinook"]      = "SAComChinok",
+        ["airf_constructamericavehiclebattledrone"]  = "SASoloDrone",
         ["constructamericainfantrymissiledefender"]  = "SAMissleDefender",
         ["constructamericainfantrypathfinder"]       = "SAPathFinder1",
         ["lasermissileattack"]                       = "SSLaserMissile",
@@ -600,7 +738,7 @@ internal static class ButtonImageReader
         ["spectregunshipfromshortcut"]   = "SASpGunship",
         ["paradrop"]                     = "SACParatroopers",
         ["daisycutter"]                  = "SACDaisyCutter",
-        ["spydrone"]                     = "SASpyDrone",
+        ["spydrone"]                     = "SAScout",
         ["spysatellite"]                 = "SSSpySat",
         ["nohotkeyspysatellite"]         = "SSSpySat",
         ["ciaintelligence"]              = "SSCIA",
@@ -625,7 +763,7 @@ internal static class ButtonImageReader
         ["usaspectregunship3"]  = "SASpGunship3",
         ["usastealthfighter"]   = "SAStealth_L",
         ["usapaladin"]          = "SAPaladin_L",
-        ["usaspydrone"]         = "SASpyDrone",
+        ["usaspydrone"]         = "SAScout",
         ["usapathfinder"]       = "SAPathFinder1",
 
         // USA battle plans
@@ -664,6 +802,12 @@ internal static class ButtonImageReader
         ["neutronwarhead"]                 = "SNNeutShell",
         ["cashhack"]                       = "SSCashHack",
         ["nuke_constructchinapowerplant"]  = "SNAdvReactor",
+        ["infa_constructchinainfantryhacker"]       = "SNHacker2",
+        ["infa_constructchinainfantryblacklotus"]   = "SNSprLotus",
+        ["infa_constructchinabunker"]               = "SNSuperBunk",
+        ["infa_constructchinavehicletroopcrawler"]   = "SNAsltTroop",
+        ["infa_constructchinavehiclelisteningoutpost"] = "NVLOutpost",
+        ["infa_constructchinavehiclehelix"]         = "SNHelix",
 
         // China star powers
         ["chinaartillerybarrage"]          = "SSBarrage",
@@ -682,6 +826,8 @@ internal static class ButtonImageReader
         ["chinaclustermines"]              = "SSClusterMines",
         ["clustermines"]                   = "SSClusterMines",
         ["chinaartillerytraining"]         = "SSArtilleryTraining",
+        ["chinanukelauncher"]              = "SNNukeCannon",
+        ["chinabattlemastertraining"]      = "SNBattleTrain",
         ["nuke_chinacarpetbomb"]           = "SSNkeCrptBmb",
         ["nuke_constructglatankbattlemaster"] = "SNNukeBtleMstr_L",
         ["tankparadrop"]                   = "SSTankDrop",
@@ -724,6 +870,11 @@ internal static class ButtonImageReader
         ["glarebelambush3"]                = "SSGLAAmbush3",
         ["tox_star_glarebelambush2"]       = "SUToxAmbsh2",
         ["tox_star_glarebelambush3"]       = "SUToxAmbsh3",
+        ["chem_constructglatunnelnetwork"] = "SUToxicTunnel",
+        ["chem_constructglainfantryrebel"] = "SUToxinRebel",
+        ["chem_constructglainfantryterrorist"] = "SUTerrorist",
+        ["demo_constructglademotrap"]      = "SUAdvDeTrap",
+        ["slth_constructglainfantryrebel"] = "SURebel",
         ["ambush"]                         = "SSGLAAmbush",
         ["sneakattack"]                    = "SUSneakAttack",
         ["glaanthraxbomb"]                 = "SSAnthraxBomb",
@@ -737,6 +888,7 @@ internal static class ButtonImageReader
         ["becomerealglaarmsdealer"]        = "SUArmsDealer_L",
         ["becomerealglabarracks"]          = "SUBarracks_L",
         ["becomerealglablackmarket"]       = "SUBlackMarket_L",
+        ["becomerealglacommandcenter"]     = "SUCommandCenter_L",
         ["becomerealglasupplystash"]       = "SUSupplyStash_L",
         ["constructglavehiclequadcannon"]  = "SuQuadCannon",
     };

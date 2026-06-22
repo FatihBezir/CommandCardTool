@@ -793,6 +793,21 @@
                                      Checked="CcFilter_Checked"/>
                     </StackPanel>
 
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="Ready profile:" Foreground="#8888AA" FontSize="12"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="cmbHotkeyProfile" Width="180" FontSize="11"
+                                  Background="#1E1E2E" Foreground="White" BorderBrush="#404060"
+                                  VerticalAlignment="Center"
+                                  SelectionChanged="CmbHotkeyProfile_SelectionChanged"/>
+                        <Button x:Name="btnApplyHotkeyProfile" Content="Apply profile"
+                                Margin="8,0,0,0" Padding="12,5" FontSize="11"
+                                FontWeight="Bold" Cursor="Hand" Background="#1A4030" Foreground="#88FFAA"
+                                BorderBrush="#33AA66" BorderThickness="1"
+                                Click="BtnApplyHotkeyProfile_Click"
+                                ToolTip="Writes the selected profile's hotkeys into !EnglishZH.big (CSF). Preview loads on profile selection; use «Apply all keys to images» for button art."/>
+                    </StackPanel>
+
                     <Button x:Name="btnApplyAllKeysFromLabels" Content="Apply all keys to images (from labels)"
                             Margin="0,8,0,0" HorizontalAlignment="Left" Padding="14,6" FontSize="11"
                             FontWeight="Bold" Cursor="Hand" Background="#1A3060" Foreground="#FFDD33"
@@ -809,7 +824,8 @@
                             <TextBlock x:Name="lblCommandCardProgress"
                                        Text="Working..."
                                        Foreground="#FFDD33" FontSize="11" Margin="0,0,0,5"/>
-                            <ProgressBar Height="8" IsIndeterminate="True"
+                            <ProgressBar x:Name="pbCommandCardProgress" Height="8"
+                                         Minimum="0" Maximum="100" Value="0"
                                          Background="#111830" Foreground="#2980FF"/>
                         </StackPanel>
                     </Border>
