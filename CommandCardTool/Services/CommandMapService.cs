@@ -508,7 +508,7 @@ internal static class CommandButtonPatcher
 
         if (patched == 0) return (null, 0);
 
-        byte[] newIni = Encoding.UTF8.GetBytes(string.Join('\n', lines));
+        byte[] newIni = Encoding.UTF8.GetBytes(string.Join("\n", lines));
         var bodies    = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, _) in idx)
         {

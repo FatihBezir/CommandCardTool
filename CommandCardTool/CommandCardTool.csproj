@@ -1,12 +1,53 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <!-- net48 ships with Windows 10 1903+, so the tool needs no runtime install.
+         Build for the modern runtime with -p:TargetFramework=net10.0-windows7.0. -->
+    <TargetFramework>net48</TargetFramework>
     <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyTitle>Generals Command Card Tool</AssemblyTitle>
     <RootNamespace>LauncherWinUI</RootNamespace>
   </PropertyGroup>
+
+  <!-- The SDK only injects implicit usings for .NET 6+ targets. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
+    <Using Include="LauncherWinUI.Compat" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <!-- net48 has no PublishSingleFile: bundle the support assemblies into the exe
+       instead, and let EmbeddedAssemblyLoader resolve them from memory. -->
+  <Target Name="EmbedDependencies"
+          Condition="'$(TargetFramework)' == 'net48'"
+          AfterTargets="ResolveAssemblyReferences"
+          BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <EmbeddedResource Include="@(ReferenceCopyLocalPaths)" Condition="'%(Extension)' == '.dll'">
+        <LogicalName>Embedded.%(Filename)%(Extension)</LogicalName>
+        <Visible>false</Visible>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
+
+  <!-- ...and keep them out of the published folder so only the exe ships. -->
+  <Target Name="DropPublishDependencies"
+          Condition="'$(TargetFramework)' == 'net48'"
+          AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.dll'" />
+    </ItemGroup>
+  </Target>
 
 </Project>

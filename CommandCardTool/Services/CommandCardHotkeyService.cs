@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Windows.Media;
@@ -19,7 +19,7 @@ internal static class CommandCardHotkeyService
 
     public static void SlotNumberToGrid(int slotNumber1Based, out int row, out int col)
     {
-        int i = Math.Clamp(slotNumber1Based, 1, 14) - 1;
+        int i = Math.Max(1, Math.Min(14, slotNumber1Based)) - 1;
         row = i / 7;
         col = i % 7;
     }
