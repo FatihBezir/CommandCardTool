@@ -42,19 +42,22 @@ internal static class CommandCardHotkeyService
         return $"{plain} (&{upper})";
     }
 
-    /// <summary>Sets the letter after &amp;, or appends (&amp;KEY) when no marker exists.</summary>
+    /// <summary>
+    /// Assigns <paramref name="key"/> as the label's hotkey.
+    /// An embedded marker is kept only when it already points at that letter
+    /// (so vanilla «&amp;Barracks» survives untouched for B); otherwise the marker is
+    /// stripped and « (&amp;KEY)» appended. Overwriting the letter after &amp; would
+    /// rewrite the word itself — «&amp;Barracks» + S became «&amp;Sarracks».
+    /// </summary>
     public static string SetHotkeyCharInLabel(string text, char key)
     {
         if (key == '\0') return StripHotkeyMarkup(text);
 
         char upper = char.ToUpperInvariant(key);
         int idx = HotkeyPainter.FindHotkeyMarkerIndex(text);
-        if (idx >= 0 && idx + 1 < text.Length)
-        {
-            char[] chars = text.ToCharArray();
-            chars[idx + 1] = upper;
-            return new string(chars);
-        }
+        if (idx >= 0 && idx + 1 < text.Length
+         && char.ToUpperInvariant(text[idx + 1]) == upper)
+            return text;
 
         return ApplyHotkeyCharToLabel(text, upper);
     }

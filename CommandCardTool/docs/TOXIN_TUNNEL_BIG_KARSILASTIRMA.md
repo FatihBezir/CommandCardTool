@@ -1,190 +1,170 @@
-# GLA Toxin Tünel — Web vs CommandCardTool BIG Karşılaştırması
+# Toxin Tünel / Nuke kısayolları — kök neden ve çözüm
 
-**Tarih:** 2026-06-22  
-**Slot:** `controlbar:chem_constructglatunnelnetwork` (Toxin Worker → Tunnel Network)  
-**Karşılaştırılan dosyalar:**
+**Güncelleme:** 2026-07-25 — bu doküman 2026-06-22 sürümünün yerini alır.
+Eski sürümdeki iki ana tespit **yanlıştı** (bkz. §6); ikisi de aşağıdaki `WRTS` hatasının yan etkisiydi.
+
+**Karşılaştırılan dosyalar**
 
 | Kaynak | Yol |
 |--------|-----|
-| Web indirme | `c:\Users\MSI\Downloads\EnglishZH (1).big` |
-| CommandCardTool çıktısı | `d:\SteamLibrary\steamapps\common\Command & Conquer Generals - Zero Hour\!EnglishZH.big` |
-| Vanilla | `d:\SteamLibrary\steamapps\common\Command & Conquer Generals - Zero Hour\EnglishZH.big` |
+| Vanilla | `…\Command & Conquer Generals - Zero Hour\EnglishZH.big` |
+| Çalışan referans (başka biri) | `…\!HotkeysLeikezeZH.big` (CSF) + `!HotkeysLeikezeIndicatorsZH.big` (atlas + INI) |
+| Bozuk çıktı | `C:\Users\MSI\Downloads\!EnglishZH.big` |
 
 ---
 
-## 1. Özet tablo
+## 1. Kök neden — `WRTS` etiketi tanınmıyordu
 
-| | Web `EnglishZH (1).big` | Tool `!EnglishZH.big` | Vanilla `EnglishZH.big` |
-|---|---|---|---|
-| **Boyut** | ~80,5 MB | ~1,5 MB *(eski build)* | ~80,5 MB |
-| **CSF etiket sayısı** | 4.176 | 4.178 | 4.176 |
-| **TGA girişi** | 66 | 1 | 66 |
-| **`Chem_ConstructGLATunnelNetwork`** | **YOK** | `Toxin &TEtwork` | **YOK** |
-| **`Chem_ToolTipGLABuildTunnelNetwork`** | **YOK** | `…Network (&T)` *(hatalı)* | **YOK** |
-| **`ConstructGLATunnelNetwork`** | `Tunnel &Network` | `Tunnel &Network` (değişmemiş) | `Tunnel &Network` |
+CSF'te metin kayıtları dört etiketten biriyle başlar: `" STR"`, `" RTS"`, `"STRW"`, `"WRTS"`.
+Son ikisi metinden sonra ayrıca bir **extra blok** (`extraLen:u32` + ASCII veri) taşır.
 
-> **Not:** Web indirmesinde `Toxin`, `Retwork` veya `Chem_Construct*` geçen hiçbir CSF anahtarı bulunamadı. Dosya pratikte vanilla `EnglishZH.big` ile aynı CSF içeriğine sahip.
+Kod yalnızca `"STRW"`i kontrol ediyordu:
 
----
-
-## 2. Oyun ne bekliyor?
-
-Zero Hour **Toxin General (Dr. Thrax)** Worker kartındaki tünel düğmesi `CommandButton.ini` içinde **Chem** varyantı kullanır:
-
-- **TextLabel:** `CONTROLBAR:Chem_ConstructGLATunnelNetwork`
-- **ToolTipTextLabel:** `CONTROLBAR:Chem_ToolTipGLABuildTunnelNetwork`
-- **ButtonImage:** `SUToxicTunnel` → `SUUserInterface512_004.tga`
-
-Vanilla `EnglishZH.big` CSF'inde bu iki **Chem_** anahtarı **yoktur**. Oyun bu anahtarları bulamazsa:
-
-- Buton metni: `MISSING: 'CONTROLBAR:Chem_ConstructGLATunnelNetwork'`
-- Tooltip: `MISSING: 'CONTROLBAR:Chem_ToolTipGLABuildTunnelNetwork'`
-- Tuş (A, T, …) **çalışmaz** — CSF'deki `&` hotkey bağlantısı kurulamaz.
-
-Normal GLA Worker (`ConstructGLATunnelNetwork` = `Tunnel &Network`) farklı bir düğmedir; Toxin Worker onu kullanmaz.
-
----
-
-## 3. Web sitesi nasıl kaydeder?
-
-Web (`CsfModModal.tsx` → `saveCsfIntoExistingBig`):
-
-1. Bellekteki **tüm** `EnglishZH.big` arşivini alır (~80 MB, 66 TGA + CSF).
-2. `buildCsf(csfData)` ile **tam CSF** üretir (sadece değişen satırlar değil).
-3. CSF girişini değiştirir; TGA'ya `updateHotkeyInBig` ile harf basar.
-4. İndirilen dosya **aynı boyutta tam arşiv** kalır.
-
-Toxin slot CSF id'si `controlbar:chem_constructglatunnelnetwork` — vanilla CSF'te bu id **yok**. Web'de slota tıklayınca çoğu zaman *"label not found"* görünür; kullanıcı CSF sekmesinden elle eklemeli veya toplu uygulama listesinde zaten var olmalı.
-
----
-
-## 4. CommandCardTool (eski build) ne yapıyordu?
-
-| Sorun | Etki |
-|-------|------|
-| **Kısmi BIG** — sadece CSF + 1 TGA yazılıyordu (~1,5 MB) | Web ile farklı çıktı formatı; oyun yine de `!EnglishZH.big`'i önce yükler |
-| **CSF tabanı `!EnglishZH.big`** — vanilla yerine eski override okunuyordu | Hatalı/eksik CSF birikimi |
-| **Yeni Chem anahtarları insert edilmiyordu** (whitelist bug) | `MISSING:` ekranı |
-| **Tooltip'e `(&T)` eklendi** | Vanilla tooltip'te `&` yok; sondaki `(&X)` oyun tooltip'ini bozar |
-| **Build etiketi `Toxin &TEtwork`** | T tuşu için `&` doğru harfe konmuş (T); görünüm garip ama hotkey harfi T ise mantıklı |
-
-Tool TGA'yı doğru atlas'a yazıyordu:
-
-```
-!EnglishZH.big içeriği (eski):
-  Data\English\generals.csf
-  Data\English\Art\Textures\SUUserInterface512_004.tga   ← SUToxicTunnel
+```csharp
+bool hasExtra = sMagic == "STRW";   // "WRTS" atlanıyor
 ```
 
----
+`generals.csf` içinde iki `WRTS` kaydı var; ilki **4177. etiket** olan
+`DIALOGEVENT:MisGLA02Chatter18Subtitle` (extra = `"superiorite"`).
+Extra blok okunmayınca akış 15 bayt kayıyor, sonraki `" LBL"` kontrolü tutmuyor ve döngü
+`break` ile çıkıyor — **kalan 2245 etiket sessizce siliniyordu.**
 
-## 5. Kök nedenler (öncelik sırasıyla)
+| | Etiket sayısı | CSF boyutu |
+|---|---|---|
+| Vanilla | 6422 | 928.775 B |
+| Bozuk çıktı | **4177** | 508.476 B |
 
-### A. Chem CSF anahtarları BIG'e gitmiyordu / yanlış formatta
-Oyun **mutlaka** `Chem_ConstructGLATunnelNetwork` ve `Chem_ToolTipGLABuildTunnelNetwork` ister. Eski tool bunları ya hiç yazmıyordu ya da tooltip'i bozuk formatta yazıyordu.
+Etkilenen dosyalar:
 
-### B. Tooltip formatı
-Vanilla:
+- `Launcher/Services/BigCsfWriter.cs` → `ApplyAllOverrides` (yazma yolu — dosyayı bozan)
+- `Launcher/Services/BigCsfReader.cs` → `ParseCsf` (UI etiket listesi)
+- `CommandCardTool/Services/BigCsfReader.cs` → `ParseCsf` (aynı)
+
+> `CommandCardTool/Services/CsfCodec.cs` her iki etiketi de doğru işliyordu; bu yüzden
+> hata yalnızca `BigCsfReader`/`BigCsfWriter` kullanan yollarda görünüyordu.
+
+## 2. Neden tam da Toxin tünel ve Nuke?
+
+Kesme noktası 4177. Genel (general) varyantı olan CONTROLBAR anahtarlarının neredeyse
+tamamı CSF'in **sonunda** duruyor:
+
+| Anahtar | Vanilla indeksi | Bozuk çıktıda |
+|---|---|---|
+| `CONTROLBAR:Chem_ConstructGLATunnelNetwork` | 6233 | yok |
+| `CONTROLBAR:Chem_ToolTipGLABuildTunnelNetwork` | 6235 | yok |
+| `CONTROLBAR:Nuke_ToolTipChinaBuildHelix` | 4177 | yok |
+| `CONTROLBAR:AirF_ToolTipUSAScienceCarpetBomb` | 6421 | yok |
+
+Kesilen bölgede **81 CONTROLBAR** anahtarı var (`Chem_`, `Nuke_`, `Boss_`, `Infa_`,
+`SupW_`, `AirF_` varyantları). Oyun anahtarı bulamayınca `MISSING: '…'` yazıyor ve
+CSF'teki `&` bağlantısı kurulamadığı için **kısayol tuşu çalışmıyor.**
+Normal komut kartı anahtarları (indeks < 4177) sağlam kaldığı için sorun
+"sadece genel skillerde" gibi görünüyordu.
+
+## 3. İkinci hata — kısayol harfi kelimeyi bozuyordu
+
+`SetHotkeyCharInLabel`, mevcut `&`den **sonraki harfin üzerine yazıyordu**:
+
 ```
-Base defense and underground tunnel. Units can enter the Tunnel Network...
-```
-Tool'un yazdığı (hatalı):
-```
-...exit at any other Tunnel Network (&T)
-```
-Oyun tooltip CSF'inde sondaki `(&X)` beklenmez → tooltip görünmez veya bozuk.
-
-### C. Build etiketi formatı
-Oyun **gömülü `&`** ister: `Toxin &Network`, `Toxin &Retwork`  
-**Kabul etmez:** `Toxin Network (&T)`  
-
-Doğru örnekler (T tuşu):
-- `Toxin &Tetwork` — `&` sonraki harf hotkey
-
-### D. Web indirmesi ile kullanıcı beklentisi uyuşmuyor
-`EnglishZH (1).big` içinde `Toxin &Retwork` **yok**. Web'den indirilen dosya ya kaydedilmemiş, ya farklı bir indirme, ya da sadece TGA harfi değişmiş (CSF metni vanilla kalmış).
-
-### E. «Apply all keys to images» yalnızca TGA sanıyordu (düzeltildi)
-Bu buton **görsel boyama** içindir ama aynı zamanda CSF de kaydedilmeli. Eski build'de UI'da görünen `Toxin &Network` metni **Chem_ConstructGLATunnelNetwork** anahtarına yazılmıyordu → oyunda `MISSING`. Yeni build `EnrichVariantLabelsForSave` ile Chem + tooltip anahtarlarını BIG'e ekler.
-
-### F. `game_path.txt` eksik
-EXE `dist\` klasöründen çalışınca `!EnglishZH.big` **Steam yerine dist'e** yazılıyordu. Oyun Steam'deki dosyayı okur → MISSING devam eder.
-
-```
-d:\SteamLibrary\steamapps\common\Command & Conquer Generals - Zero Hour
+&Barracks       + S  →  &Sarracks
+S&upply Center  + D  →  S&Dpply Center
+Wor&ker         + R  →  Wor&Rer
+Tunnel &Network + V  →  Tunnel &Retwork
 ```
 
----
+Bozuk çıktıdaki 22 değişikliğin **22'si de** bu şekilde bozulmuştu — "yazılar bozuk"
+şikayetinin kaynağı bu.
 
-## 6. Yapılan düzeltmeler (2026-06-22)
+## 4. Doğru kısayol biçimi
+
+Çalışan referans, gömülü `&` yerine **sona parantezli sonek** kullanıyor:
+
+```
+controlbar:chem_constructglatunnelnetwork  =  Toxin Network (&V)
+controlbar:constructglatunnelnetwork       =  Tunnel Network (&V)
+controlbar:constructchinavehiclenukelauncher = Nuke Cannon (&X)
+```
+
+Referanstaki 328 `&` içeren CONTROLBAR etiketinin 277'si bu biçimde. Tooltip
+anahtarlarına `&` **eklenmiyor**.
+
+## 5. Yapılan düzeltmeler (2026-07-25)
 
 | Dosya | Değişiklik |
 |-------|------------|
-| `BigCsfWriter.cs` | Kaynak = **vanilla `EnglishZH.big`**; tüm 66 TGA + CSF kopyalanır, sadece CSF ve boyanan TGA patch'lenir (web ile aynı strateji) |
-| `BigCsfWriter.cs` | Yeni Chem anahtarları CSF'e insert (override kaynakta yoksa) |
-| `OptionsPage.xaml.cs` | `GetEffectiveCsfLabelsForSave()` — tam birleşik CSF sözlüğü |
-| `OptionsPage.xaml.cs` | `SeedVariantTooltipCsf` — tooltip = vanilla metin (**`(&X)` eklenmez**) |
-| `CommandCardHotkeyService.cs` | `GraftVariantLabelFromVanilla` — `Toxin &Network` formatı |
-| `CsfVariantKeys.cs` | PascalCase `Chem_ConstructGLATunnelNetwork` anahtar eşlemesi |
+| `Launcher/Services/BigCsfWriter.cs` | `WRTS` + `STRW` extra bloğu okunuyor/yazılıyor; geçersiz etikette sessiz kesme yerine `null` dönülüyor; etiket sayısı doğrulanıyor |
+| `Launcher/Services/BigCsfWriter.cs` | `RebuildAll` çıktısı kaynaktan az etiket içeriyorsa yazılmıyor; kaynak = çıktı ise iptal |
+| `Launcher/Services/BigCsfReader.cs` | `WRTS` extra bloğu atlanıyor |
+| `CommandCardTool/Services/BigCsfReader.cs` | aynı |
+| `*/Services/CommandCardHotkeyService.cs` | `SetHotkeyCharInLabel` artık harfin üzerine yazmıyor; gömülü `&` yalnızca zaten doğru harfi gösteriyorsa korunuyor, aksi halde ` (&X)` soneki |
+| `CommandCardTool/Services/BigCsfWriter.cs` | Önceki override yalnızca **sağlamsa** (etiket sayısı ≥ vanilla) taban alınıyor; boyut sınırı yerine içerik kontrolü — daha önce boyanmış atlaslar artık yeniden kayıtta korunuyor |
 
----
+## 5b. Next.js projesindeki eksikler (aynı tarihte düzeltildi)
 
-## 7. Doğru kayıt sonrası beklenen `!EnglishZH.big`
+Downloads'taki bozuk dosyayı **C# üretti**; web codec'i `WRTS`i doğru işliyordu. Yine de
+`lib/csf-utils.ts` içinde kayıplar vardı:
 
-| Alan | Değer |
-|------|-------|
-| Boyut | ~80,5 MB (vanilla ile aynı mertebe) |
-| TGA | 66 (sadece `SUUserInterface512_004.tga` boyanmış) |
-| `CONTROLBAR:Chem_ConstructGLATunnelNetwork` | `Toxin &Tetwork` *(T tuşu)* veya `Toxin &Retwork` *(R tuşu)* |
-| `CONTROLBAR:Chem_ToolTipGLABuildTunnelNetwork` | Vanilla tooltip metni, **& veya (&X) olmadan** |
-| `CONTROLBAR:ConstructGLATunnelNetwork` | `Tunnel &Network` (vanilla, değişmeden) |
+| Sorun | Etki | Düzeltme |
+|---|---|---|
+| `parseCsf` etiket başına değil **string başına** öğe üretiyordu | String'i olmayan etiket (`TOOLTIP:InvalidGameVersion`) her indirmede siliniyordu; çok string'li etiket aynı id ile ikiye bölünüyordu | Etiket başına tek öğe; fazladan string'ler `rest[]`, boş etiket `empty` ile korunuyor |
+| `buildCsf` header'ı sabit yazıyordu (`version=3, reserved=0, language=0`) | İngilizce dışı CSF'in dil alanı sıfırlanıyordu | `parseCsfHeader` ile okunup geri yazılıyor |
+| `numStrings` alanına etiket sayısı yazılıyordu | Header gerçek string sayısını yansıtmıyordu | Yazılan string'ler sayılıyor |
+| `parseCsf` desync'te sessizce kısa liste dönüyordu | C#'taki felaketin aynısı: eksik CSF indirilir | Kayıt öncesi `buildCsfChecked` header'daki etiket sayısıyla karşılaştırıyor, eksikse kaydı iptal edip uyarıyor |
 
----
+Sonuç: vanilla `generals.csf` artık web'de de **bayt bayt aynı** round-trip yapıyor
+(önce 928.775 → 928.737 B, 1 etiket kayıp).
 
-## 8. Test adımları
+Web tarafında kısayol metnini kullanıcı elle yazdığı için §3'teki harf bozma hatası yok.
 
-1. `dist\CommandCardTool.exe` yanına `game_path.txt` → Steam ZH klasörü.
-2. Eski `!EnglishZH.big` yedekle veya sil.
-3. GLA Toxin → Worker → Tunnel Network → etiket + tuş uygula → **Apply to BIG**.
-4. Oyunda Toxin Worker seç → tünel düğmesi:
-   - Metin: `Toxin …` (MISSING yok)
-   - Tooltip: uzun açıklama metni
-   - Tuş: CSF'deki `&` harfi (ör. T)
+## 6. Eski dokümandaki hatalı tespitler
 
-Karşılaştırma aracı: `tools\CompareBigCsf\` → `dotnet run`
+| Eski iddia | Gerçek |
+|---|---|
+| «Vanilla CSF'te `Chem_ConstructGLATunnelNetwork` **yok**» | **Var** — indeks 6233, değeri `Toxin &Network`. Eski analiz kesilmiş CSF'i okuduğu için göremedi. |
+| «Oyun sondaki `(&X)` biçimini kabul etmez» | **Kabul ediyor** — çalışan referansın tamamı bu biçimde. |
 
----
+## 7. Doğrulama
 
-## 9. Web vs Tool — akış diyagramı
-
-```mermaid
-flowchart LR
-  subgraph Web
-    W1[EnglishZH.big yükle 80MB]
-    W2[buildCsf - tüm CSF]
-    W3[CSF + TGA patch]
-    W4[Tam 80MB indir]
-  end
-  subgraph Tool_eski
-    T1[Sadece dirty keys]
-    T2[1 CSF + 1 TGA]
-    T3["!EnglishZH 1.5MB"]
-  end
-  subgraph Tool_yeni
-    N1[Vanilla EnglishZH.big taban]
-    N2[Tüm CSF + Chem insert]
-    N3[66 TGA koru, 1 patch]
-    N4["!EnglishZH ~80MB"]
-  end
-  W1 --> W2 --> W3 --> W4
-  T1 --> T2 --> T3
-  N1 --> N2 --> N3 --> N4
+```
+Launcher ApplyAllOverrides(vanilla, {})   928.775 B → 928.775 B, bayt bayt aynı
+                          (önce)          928.775 B → 508.468 B
+BigCsfReader.ReadFromBig(vanilla)         6421 etiket  (önce: 4176)
+CONTROLBAR:Chem_ConstructGLATunnelNetwork "Toxin Network (&V)"  == referans
+&Barracks + S                             "Barracks (&S)"  (önce: "&Sarracks")
+&Barracks + B                             "&Barracks"      (değişmeden korunur)
 ```
 
----
+Yeniden kayıt senaryosu (CommandCardTool, iki ardışık kayıt):
 
-## 10. Referanslar
+```
+kayıt#1  entries=2  csfLabels=6422  atlases=[SUUserInterface512_004.tga]
+kayıt#2  entries=3  csfLabels=6422  atlases=[SUUserInterface512_004.tga, SNUserInterface512_003.tga]
+         her iki kayıttaki metin değişiklikleri de korunuyor
+```
 
-- Web doküman: `b_xVYnaSynIKZ-1773220180149/docs/KOMUT_KARTI_KISAYOL_DEGISTIRME.md`
-- Slot haritası: `chem_constructglatunnelnetwork` → `SUToxicTunnel`
-- CSF PascalCase: `CsfVariantKeys.CommandBarPascalBare`
+## 8. Mevcut bozuk dosyalar
+
+Düzeltilmiş EXE eski çıktıyı onarmaz — bozuk override'lar **silinmeli**:
+
+```
+…\Command & Conquer Generals - Zero Hour\!EnglishZH.big
+…\Command & Conquer Generals - Zero Hour\!EnglishZH.big.bak
+C:\Users\MSI\Downloads\!EnglishZH.big
+```
+
+Silindikten sonra düzenleme yeniden yapılır; taban her zaman vanilla `EnglishZH.big`.
+
+## 9. BIG yükleme sırası (değişmedi)
+
+Oyun klasördeki `.big` dosyalarını alfabetik yükler, **ilk gelen kazanır**:
+
+```
+!EnglishZH.big                     ← araç çıktısı (CSF + boyanmış atlaslar)
+!HotkeysLeikezeIndicatorsZH.big    ← atlas + Data\INI\MappedImages\… + CommandButton.ini
+!HotkeysLeikezeZH.big              ← hazır profil CSF'i
+EnglishZH.big                      ← vanilla
+```
+
+`!EnglishZH.big`, `!Hotkeys…` dosyalarından önce geldiği için araç çıktısı her zaman
+üstte kalır. `GameBigStack.IsHotkeyProfileBig` sayesinde `!HotkeysLeikeze*` dosyaları
+«Current CSF» birleştirmesine katılmaz.

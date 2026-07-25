@@ -1,4 +1,4 @@
-using LauncherWinUI.Models;
+﻿using LauncherWinUI.Models;
 using LauncherWinUI.Services;
 using System;
 using System.Collections.Generic;
@@ -2143,6 +2143,9 @@ namespace LauncherWinUI.Pages
         private static Dictionary<string, string> _csfDirtyOverrides
             = new(StringComparer.OrdinalIgnoreCase);
         private static Dictionary<string, string>? _profileHotkeyOverrides;
+
+        /// <summary>Labels as first loaded — the yardstick for «did this edit create a hotkey conflict?».</summary>
+        private static Dictionary<string, string>? _csfBaselineLabels;
         private static string? _activeProfileName;
         private string _currentEditCsfId = "";
         private string _currentEditArmy    = "";
@@ -2226,6 +2229,8 @@ namespace LauncherWinUI.Pages
 
                 ButtonImageReader.Load(gameDir);
             }
+
+            _csfBaselineLabels ??= new Dictionary<string, string>(_csfLabels, StringComparer.OrdinalIgnoreCase);
 
             ClearProfileHotkeyOverrides();
             _csfDirtyOverrides.Clear();
@@ -3268,6 +3273,63 @@ namespace LauncherWinUI.Pages
                 : phase;
         }
 
+
+        // ── Hotkey conflicts ──────────────────────────────────────────────────
+
+        private const string CcStarCardName = "General Powers";
+
+        private static string LookupCardLabel(IReadOnlyDictionary<string, string> labels, string csfId)
+            => CsfVariantKeys.TryGetLabelText(labels, csfId, out _, out var text) ? text : "";
+
+        /// <summary>Every command-card slot of every army, with the label text it would be saved with.</summary>
+        private IEnumerable<HotkeyConflictService.SlotEntry> EnumerateCardSlots(
+            IReadOnlyDictionary<string, string> labels)
+        {
+            foreach (var army in _ccArmyData.Keys)
+            {
+                foreach (var mapKey in GetRelevantSlotMapKeys(army))
+                {
+                    if (string.Equals(mapKey, CcStarCardName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!TryGetSlotDefs(army, mapKey, out var slots)) continue;
+                    foreach (var slot in slots)
+                        yield return new HotkeyConflictService.SlotEntry(
+                            $"{army} / {mapKey}", slot.CsfId, LookupCardLabel(labels, slot.CsfId));
+                }
+
+                if (STAR_SLOT_MAP.TryGetValue(army, out var stars))
+                    foreach (var star in stars.Values)
+                        yield return new HotkeyConflictService.SlotEntry(
+                            $"{army} / {CcStarCardName}", star.LabelCsfId,
+                            LookupCardLabel(labels, star.LabelCsfId));
+            }
+        }
+
+        /// <summary>
+        /// True when the layout about to be written puts two buttons of one card on the
+        /// same key. Only conflicts the user introduced block — vanilla already ships a
+        /// few (GLA fake buildings), and those must not make saving impossible.
+        /// </summary>
+        private bool BlockedByHotkeyConflicts(IReadOnlyDictionary<string, string> labelsForSave)
+        {
+            if (_csfBaselineLabels == null) return false;
+
+            var conflicts = HotkeyConflictService.FindNew(
+                EnumerateCardSlots(_csfBaselineLabels),
+                EnumerateCardSlots(labelsForSave));
+            if (conflicts.Count == 0) return false;
+
+            ShowCommandCardStatus(
+                $"Save cancelled — {conflicts.Count} hotkey conflict(s) on the command cards.", isError: true);
+            MessageBox.Show(
+                "Two buttons on the same command card cannot share a key — in game only one of them fires."
+                + Environment.NewLine + Environment.NewLine
+                + HotkeyConflictService.Describe(conflicts)
+                + Environment.NewLine + Environment.NewLine
+                + "Change one of the letters, then save again.",
+                "Hotkey conflict", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return true;
+        }
+
         private bool PersistCommandCardToBig(Dictionary<string, byte[]>? tgaPatches)
         {
             if (_csfDirtyOverrides.Count == 0 && (tgaPatches == null || tgaPatches.Count == 0))
@@ -3283,7 +3345,10 @@ namespace LauncherWinUI.Pages
                 return false;
             }
 
-            string? outPath = BigCsfWriter.RebuildAll(bigPath, GetEffectiveCsfLabelsForSave(), tgaPatches);
+            var labelsForSave = GetEffectiveCsfLabelsForSave();
+            if (BlockedByHotkeyConflicts(labelsForSave)) return false;
+
+            string? outPath = BigCsfWriter.RebuildAll(bigPath, labelsForSave, tgaPatches);
             if (outPath == null)
             {
                 ShowCommandCardStatus("Failed to save BIG file.", isError: true);
@@ -3694,6 +3759,8 @@ namespace LauncherWinUI.Pages
             }
 
             var labelsSnapshot = GetEffectiveCsfLabelsForSave();
+            if (BlockedByHotkeyConflicts(labelsSnapshot)) return false;
+
             int bindingCount = bindings.Count;
             SetCommandCardBusy(true, $"Working on {scopeDescription}...", bindingCount);
 

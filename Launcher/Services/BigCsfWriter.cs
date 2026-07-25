@@ -48,6 +48,13 @@ internal static class BigCsfWriter
         try
         {
             string outputPath = GetOutputPath(sourceBigPath);
+
+            // Rebuilding an override on top of itself compounds any earlier damage —
+            // the base must always be the untouched vanilla archive.
+            if (string.Equals(Path.GetFullPath(outputPath), Path.GetFullPath(sourceBigPath),
+                              StringComparison.OrdinalIgnoreCase))
+                return null;
+
             byte[] sourceBigData = File.ReadAllBytes(sourceBigPath);
 
             var entries = ExtractAllEntries(sourceBigData);
@@ -57,8 +64,13 @@ internal static class BigCsfWriter
                 e.Name.EndsWith(".csf", StringComparison.OrdinalIgnoreCase));
             if (csfIdx < 0) return null;
 
-            byte[]? patchedCsf = ApplyAllOverrides(entries[csfIdx].Data, allOverrides);
+            byte[] sourceCsf = entries[csfIdx].Data;
+            byte[]? patchedCsf = ApplyAllOverrides(sourceCsf, allOverrides);
             if (patchedCsf == null) return null;
+
+            // Never ship a CSF with fewer labels than the source: the game renders every
+            // dropped label as MISSING: '…' and its & hotkey stops working.
+            if (CountLabels(patchedCsf) < CountLabels(sourceCsf)) return null;
 
             var names = new List<string>();
             var bodies = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
@@ -204,19 +216,28 @@ internal static class BigCsfWriter
             var labels = new List<CsfLabel>();
             for (uint i = 0; i < numLabels; i++)
             {
-                if (ms.Position + 12 > ms.Length) break;
-                if (new string(br.ReadChars(4)) != " LBL") break;
+                // A desync here means every remaining label would be silently dropped,
+                // so bail out instead of writing a truncated CSF.
+                if (ms.Position + 12 > ms.Length) return null;
+                if (new string(br.ReadChars(4)) != " LBL") return null;
 
                 uint   strCount = br.ReadUInt32();
                 uint   nameLen  = br.ReadUInt32();
+                if (ms.Position + nameLen > ms.Length) return null;
                 string key      = new(br.ReadChars((int)nameLen));
 
                 var strings = new List<CsfString>();
                 for (uint j = 0; j < strCount; j++)
                 {
-                    string sMagic   = new(br.ReadChars(4));
-                    bool   hasExtra = sMagic == "STRW";
-                    uint   charLen  = br.ReadUInt32();
+                    if (ms.Position + 8 > ms.Length) return null;
+                    string sMagic = new(br.ReadChars(4));
+                    if (!IsValidStringTag(sMagic)) return null;
+
+                    // Zero Hour's generals.csf uses "WRTS" (not just "STRW") for
+                    // strings carrying extra data — missing it desyncs the reader.
+                    bool hasExtra = TagHasExtra(sMagic);
+                    uint charLen  = br.ReadUInt32();
+                    if (ms.Position + charLen * 2L > ms.Length) return null;
 
                     var chars = new char[charLen];
                     for (uint k = 0; k < charLen; k++)
@@ -226,7 +247,9 @@ internal static class BigCsfWriter
                     string? extra = null;
                     if (hasExtra)
                     {
-                        uint   extraLen   = br.ReadUInt32();
+                        if (ms.Position + 4 > ms.Length) return null;
+                        uint extraLen = br.ReadUInt32();
+                        if (ms.Position + extraLen > ms.Length) return null;
                         byte[] extraBytes = br.ReadBytes((int)extraLen);
                         extra = Encoding.ASCII.GetString(extraBytes);
                     }
@@ -234,6 +257,8 @@ internal static class BigCsfWriter
                 }
                 labels.Add(new CsfLabel(key, strings));
             }
+
+            if (labels.Count != numLabels) return null;
 
             // Apply every override whose key matches a label already in the CSF.
             var appliedOverrideKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -300,6 +325,66 @@ internal static class BigCsfWriter
         return ci >= 0 ? k[(ci + 1)..] : k;
     }
 
+    // CSF string records use four tags. " STR"/" RTS" carry text only;
+    // "STRW"/"WRTS" are followed by an extra ASCII block that must be
+    // consumed on read and re-emitted on write, or the stream desyncs.
+    private static bool IsValidStringTag(string magic)
+        => magic is " STR" or " RTS" or "STRW" or "WRTS";
+
+    private static bool TagHasExtra(string magic)
+        => magic is "STRW" or "WRTS";
+
+    /// <summary>Label count actually reachable by walking the records (not the header field).</summary>
+    private static int CountLabels(byte[] csfData)
+    {
+        try
+        {
+            using var ms = new MemoryStream(csfData);
+            using var br = new BinaryReader(ms, Encoding.ASCII, leaveOpen: true);
+            if (new string(br.ReadChars(4)) != " FSC") return 0;
+
+            br.ReadUInt32();                    // version
+            uint numLabels = br.ReadUInt32();
+            br.ReadUInt32();                    // numStrings
+            br.ReadUInt32();                    // reserved
+            br.ReadUInt32();                    // language
+
+            int seen = 0;
+            for (uint i = 0; i < numLabels; i++)
+            {
+                if (ms.Position + 12 > ms.Length) break;
+                if (new string(br.ReadChars(4)) != " LBL") break;
+
+                uint strCount = br.ReadUInt32();
+                uint nameLen  = br.ReadUInt32();
+                if (ms.Position + nameLen > ms.Length) break;
+                ms.Seek(nameLen, SeekOrigin.Current);
+
+                bool ok = true;
+                for (uint j = 0; j < strCount; j++)
+                {
+                    if (ms.Position + 8 > ms.Length) { ok = false; break; }
+                    string magic = new(br.ReadChars(4));
+                    if (!IsValidStringTag(magic)) { ok = false; break; }
+
+                    uint charLen = br.ReadUInt32();
+                    if (ms.Position + charLen * 2L > ms.Length) { ok = false; break; }
+                    ms.Seek(charLen * 2L, SeekOrigin.Current);
+
+                    if (!TagHasExtra(magic)) continue;
+                    if (ms.Position + 4 > ms.Length) { ok = false; break; }
+                    uint extraLen = br.ReadUInt32();
+                    if (ms.Position + extraLen > ms.Length) { ok = false; break; }
+                    ms.Seek(extraLen, SeekOrigin.Current);
+                }
+                if (!ok) break;
+                seen++;
+            }
+            return seen;
+        }
+        catch { return 0; }
+    }
+
     private static bool OverrideMatchesLabel(string overrideKey, string csfLabelKey)
         => string.Equals(overrideKey, csfLabelKey, StringComparison.OrdinalIgnoreCase)
         || string.Equals(BareKey(overrideKey), BareKey(csfLabelKey), StringComparison.OrdinalIgnoreCase);
@@ -337,9 +422,11 @@ internal static class BigCsfWriter
                 foreach (char c in chars)
                     bw.Write((ushort)(c ^ 0xFFFF));
 
-                if (s.Extra != null)
+                // The extra block is mandatory for STRW/WRTS: emit it even when empty,
+                // otherwise the next label starts at the wrong offset.
+                if (TagHasExtra(s.Magic))
                 {
-                    byte[] extraBytes = Encoding.ASCII.GetBytes(s.Extra);
+                    byte[] extraBytes = Encoding.ASCII.GetBytes(s.Extra ?? "");
                     bw.Write((uint)extraBytes.Length);
                     bw.Write(extraBytes);
                 }

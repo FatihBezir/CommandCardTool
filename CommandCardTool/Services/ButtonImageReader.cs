@@ -38,6 +38,18 @@ internal static class ButtonImageReader
     private static readonly Dictionary<string, MappedDef> _mapped
         = new(StringComparer.OrdinalIgnoreCase);
 
+    // Track occurrence count for duplicate MappedImage names
+    private static readonly Dictionary<string, List<MappedDef>> _mappedOccurrences
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    // Specify which occurrence to use for duplicate MappedImage names (0 = first, 1 = second, etc.)
+    // Example: Two SSRadarVanScan in INI — GLA Black Market Radar S&can uses the second one
+    private static readonly Dictionary<string, int> _mappedImageOccurrence
+        = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ssradarvanscan"] = 1,  // GLA Black Market uses second occurrence
+        };
+
     // CSF text-label (lower) → ButtonImage name (from INIZH.big CommandButton blocks)
     private static readonly Dictionary<string, string> _cbLabel
         = new(StringComparer.OrdinalIgnoreCase);
@@ -54,6 +66,7 @@ internal static class ButtonImageReader
         _tgaEntries.Clear();
         _tgaEntriesByStem.Clear();
         _mapped.Clear();
+        _mappedOccurrences.Clear();
         _cbLabel.Clear();
         _cache.Clear();
         _gameDir = null;
@@ -187,6 +200,17 @@ internal static class ButtonImageReader
 
         foreach (var name in MappedNameCandidates(miName))
         {
+            // Check if this name should use a specific occurrence
+            string nameLower = name.ToLowerInvariant();
+            if (_mappedImageOccurrence.TryGetValue(nameLower, out int wantedIdx)
+                && _mappedOccurrences.TryGetValue(name, out var occurrences)
+                && wantedIdx < occurrences.Count)
+            {
+                var info = BuildTgaSlotInfo(occurrences[wantedIdx]);
+                if (info != null) return info;
+            }
+            
+            // Default: use first occurrence
             if (_mapped.TryGetValue(name, out var def))
             {
                 var info = BuildTgaSlotInfo(def);
@@ -283,7 +307,15 @@ internal static class ButtonImageReader
             if (line.StartsWith("MappedImage ", StringComparison.OrdinalIgnoreCase))
             {
                 if (curName != "" && curTex != "" && hasCoords)
-                    _mapped.TryAdd(curName, new MappedDef(curTex, l, t, r, b));
+                {
+                    var def = new MappedDef(curTex, l, t, r, b);
+                    _mapped.TryAdd(curName, def);
+                    
+                    // Track occurrences for duplicate names
+                    if (!_mappedOccurrences.ContainsKey(curName))
+                        _mappedOccurrences[curName] = new List<MappedDef>();
+                    _mappedOccurrences[curName].Add(def);
+                }
                 curName = line[12..].Trim().Split(';')[0].Trim();
                 curTex = ""; l = t = r = b = 0; hasCoords = false;
             }
@@ -313,7 +345,15 @@ internal static class ButtonImageReader
             }
         }
         if (curName != "" && curTex != "" && hasCoords)
-            _mapped.TryAdd(curName, new MappedDef(curTex, l, t, r, b));
+        {
+            var def = new MappedDef(curTex, l, t, r, b);
+            _mapped.TryAdd(curName, def);
+            
+            // Track occurrences for duplicate names
+            if (!_mappedOccurrences.ContainsKey(curName))
+                _mappedOccurrences[curName] = new List<MappedDef>();
+            _mappedOccurrences[curName].Add(def);
+        }
     }
 
     private static void ParseCommandButtons(string iniText)
@@ -522,16 +562,28 @@ internal static class ButtonImageReader
 
     private static BitmapSource? CropByMappedName(string name)
     {
-        if (_mapped.TryGetValue(name, out var def))
+        // Check if this name should use a specific occurrence (e.g., second SSRadarVanScan for GLA Black Market)
+        string nameLower = name.ToLowerInvariant();
+        if (_mappedImageOccurrence.TryGetValue(nameLower, out int wantedIdx)
+            && _mappedOccurrences.TryGetValue(name, out var occurrences)
+            && wantedIdx < occurrences.Count)
         {
+            var def = occurrences[wantedIdx];
             var img = CropTga(def.Texture, def.Left, def.Top, def.Right, def.Bottom);
+            if (img != null) return img;
+        }
+        
+        // Default: use first occurrence
+        if (_mapped.TryGetValue(name, out var defDefault))
+        {
+            var img = CropTga(defDefault.Texture, defDefault.Left, defDefault.Top, defDefault.Right, defDefault.Bottom);
             if (img != null) return img;
         }
 
         // Primary icon may live on a missing atlas (e.g. SAScout on 003); try _L on 001.
         if (!name.EndsWith("_L", StringComparison.OrdinalIgnoreCase)
-         && _mapped.TryGetValue(name + "_L", out def))
-            return CropTga(def.Texture, def.Left, def.Top, def.Right, def.Bottom);
+         && _mapped.TryGetValue(name + "_L", out defDefault))
+            return CropTga(defDefault.Texture, defDefault.Left, defDefault.Top, defDefault.Right, defDefault.Bottom);
 
         return null;
     }
@@ -852,8 +904,8 @@ internal static class ButtonImageReader
         ["upgradeglarebelcapturebuilding"] = "SSCapture",
         ["upgradeglascorpionrocket"]       = "SSScorpionRocket",
         ["upgradeglacamonetting"]          = "SUcamo",
-        ["upgradeglaradarvanscan"]         = "SSRadarVanScan",
-        ["radarvanscan"]                   = "SSRadarVanScan",
+        ["upgradeglaradarvanscan"]         = "SSRadarVanScan",  // GLA Black Market - uses second occurrence
+        ["radarvanscan"]                   = "SSRadarVanScan",  // GLA Radar Van unit - uses first occurrence
         ["upgradeglaworkerfakecommandset"] = "SUSneakBuildMode",
         ["detonate"]                       = "SSDetonateDemo",
         ["detonatefakebuilding"]           = "SSDetonateDemo",

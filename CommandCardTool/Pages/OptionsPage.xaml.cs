@@ -1,4 +1,4 @@
-using LauncherWinUI.Models;
+﻿using LauncherWinUI.Models;
 using LauncherWinUI.Services;
 using System;
 using System.Collections.Generic;
@@ -1185,10 +1185,16 @@ namespace LauncherWinUI.Pages
                 CC(1,"detonatefakebuilding"),
             },
             ["Palace"] = new() {
-                CC(1,"constructglainfantryrebel"), CC(2,"constructglainfantryangrymob"),
+                CC(1,"structureexit"), CC(2,"structureexit"), CC(3,"structureexit"),
+                CC(4,"upgradeglafortifiedstructure"), CC(5,"upgradeglacamouflage"),
+                CC(6,"upgradeglaanthraxbeta"), CC(8,"structureexit"), CC(9,"structureexit"),
+                CC(10,"evacuate"), CC(11,"upgradeglaarmthemob"), CC(12,"upgradeglatoxinshells"),
                 CC(14,"sell"),
             },
             ["Black Market"] = new() {
+                CC(1,"upgradeglaapbullets"), CC(2,"upgradeglajunkrepair"),
+                CC(3,"upgradeglaradarvanscan"), CC(8,"upgradeglaaprockets"),
+                CC(9,"upgradeglabuggyammo"), CC(10,"upgradeglaworkershoes"),
                 CC(14,"sell"),
             },
             ["Scud Storm"] = new() {
@@ -2202,6 +2208,9 @@ namespace LauncherWinUI.Pages
         /// <summary>Only keys the user/tool actually changed — never write the full merged CSF dict to BIG.</summary>
         private static Dictionary<string, string> _csfDirtyOverrides
             = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Labels as first loaded — the yardstick for «did this edit create a hotkey conflict?».</summary>
+        private static Dictionary<string, string>? _csfBaselineLabels;
         private string _currentEditCsfId = "";
         private string _currentEditLabelCsfId = "";
         private string _currentEditArmy    = "";
@@ -2343,6 +2352,8 @@ namespace LauncherWinUI.Pages
 
                 ButtonImageReader.Load(gameDir);
             }
+
+            _csfBaselineLabels ??= new Dictionary<string, string>(_csfLabels, StringComparer.OrdinalIgnoreCase);
 
             _csfDirtyOverrides.Clear();
 
@@ -3498,6 +3509,74 @@ namespace LauncherWinUI.Pages
                 : phase;
         }
 
+
+        // ── Hotkey conflicts ──────────────────────────────────────────────────
+
+        private const string CcStarCardName = "General Powers";
+
+        private static string LookupCardLabel(IReadOnlyDictionary<string, string> labels, string csfId)
+            => CsfVariantKeys.TryGetLabelText(labels, csfId, out _, out var text) ? text : "";
+
+        /// <summary>Every command-card slot of every army, with the label text it would be saved with.</summary>
+        private IEnumerable<HotkeyConflictService.SlotEntry> EnumerateCardSlots(
+            IReadOnlyDictionary<string, string> labels)
+        {
+            foreach (var army in _ccArmyData.Keys)
+            {
+                foreach (var mapKey in GetRelevantSlotMapKeys(army))
+                {
+                    if (string.Equals(mapKey, CcStarCardName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!TryGetSlotDefs(army, mapKey, out var slots)) continue;
+                    foreach (var slot in slots)
+                        yield return new HotkeyConflictService.SlotEntry(
+                            $"{army} / {mapKey}", slot.CsfId, LookupCardLabel(labels, slot.CsfId));
+                }
+
+                if (STAR_SLOT_MAP.TryGetValue(army, out var stars))
+                    foreach (var star in stars.Values)
+                        yield return new HotkeyConflictService.SlotEntry(
+                            $"{army} / {CcStarCardName}", star.LabelCsfId,
+                            LookupCardLabel(labels, star.LabelCsfId));
+            }
+        }
+
+        /// <summary>Merged label map as it would land in the BIG (loaded labels + pending overrides).</summary>
+        private Dictionary<string, string> GetEffectiveLabelsForConflictCheck(
+            IReadOnlyDictionary<string, string> overrides)
+        {
+            var eff = _csfLabels != null
+                ? new Dictionary<string, string>(_csfLabels, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in overrides) eff[kv.Key] = kv.Value;
+            return eff;
+        }
+
+        /// <summary>
+        /// True when the layout about to be written puts two buttons of one card on the
+        /// same key. Only conflicts the user introduced block — vanilla already ships a
+        /// few (GLA fake buildings), and those must not make saving impossible.
+        /// </summary>
+        private bool BlockedByHotkeyConflicts(IReadOnlyDictionary<string, string> labelsForSave)
+        {
+            if (_csfBaselineLabels == null) return false;
+
+            var conflicts = HotkeyConflictService.FindNew(
+                EnumerateCardSlots(_csfBaselineLabels),
+                EnumerateCardSlots(labelsForSave));
+            if (conflicts.Count == 0) return false;
+
+            ShowCommandCardStatus(
+                $"Save cancelled — {conflicts.Count} hotkey conflict(s) on the command cards.", isError: true);
+            MessageBox.Show(
+                "Two buttons on the same command card cannot share a key — in game only one of them fires."
+                + Environment.NewLine + Environment.NewLine
+                + HotkeyConflictService.Describe(conflicts)
+                + Environment.NewLine + Environment.NewLine
+                + "Change one of the letters, then save again.",
+                "Hotkey conflict", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return true;
+        }
+
         private bool PersistCommandCardToBig(Dictionary<string, byte[]>? tgaPatches)
         {
             if (_csfLabels == null) return false;
@@ -3516,6 +3595,8 @@ namespace LauncherWinUI.Pages
                 ShowCommandCardStatus("Nothing to save.", isError: true);
                 return false;
             }
+
+            if (BlockedByHotkeyConflicts(GetEffectiveLabelsForConflictCheck(overrides))) return false;
 
             string? outPath = BigCsfWriter.RebuildAll(bigPath, overrides, tgaPatches);
             if (outPath == null)
@@ -3938,6 +4019,8 @@ namespace LauncherWinUI.Pages
             }
 
             var overrides = GetOverridesForBigSave();
+            if (BlockedByHotkeyConflicts(GetEffectiveLabelsForConflictCheck(overrides))) return false;
+
             int bindingCount = styledBindings.Count;
             SetCommandCardBusy(true, $"Working on {scopeDescription}...", bindingCount);
 

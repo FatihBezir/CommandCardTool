@@ -91,9 +91,9 @@ internal static class BigCsfReader
     //             | numStrings(u32) | reserved(u32) | language(u32)
     //   Label   : magic=" LBL"(4) | strCount(u32) | nameLen(u32)
     //             | name(nameLen ASCII bytes)
-    //   String  : magic=" RTS" or "STRW"(4) | charLen(u32)
+    //   String  : magic=" STR"/" RTS"/"STRW"/"WRTS"(4) | charLen(u32)
     //             | chars(charLen × u16, each XOR 0xFFFF → UTF-16LE)
-    //             [if "STRW": extraLen(u32) | extra(extraLen bytes, ASCII)]
+    //             [if "STRW" or "WRTS": extraLen(u32) | extra(extraLen bytes, ASCII)]
 
     private static Dictionary<string, string> ParseCsf(byte[] data)
     {
@@ -126,7 +126,9 @@ internal static class BigCsfReader
                 {
                     if (ms.Position + 8 > ms.Length) break;
                     string sMagic = new string(br.ReadChars(4));
-                    bool   hasExtra = sMagic == "STRW";
+                    // "WRTS" also carries an extra block; treating it as plain text
+                    // desyncs the stream and silently drops every later label.
+                    bool   hasExtra = sMagic is "STRW" or "WRTS";
 
                     uint charLen = br.ReadUInt32();
                     var  chars   = new char[charLen];
